@@ -203,7 +203,7 @@ main(int argc, char **argv)
 
     if(name_server) {
         unsigned char n[16];
-        rc = inet_pton(AF_INET6, prefix, n);
+        rc = inet_pton(AF_INET6, name_server, n);
         if(rc < 0) {
             fprintf(stderr, "Couldn't parse name server.\n");
             exit(1);
