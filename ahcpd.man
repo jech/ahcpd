@@ -1,0 +1,48 @@
+.TH AHCPD 8
+.SH NAME
+ahcpd \- ad-hoc configuration daemon
+.SH SYNOPSIS
+.B ahcpd
+.IR option ...
+[
+.B \-\-
+]
+.IR interface ...
+.SH DESCRIPTION
+AHCP is a configuration protocol for IPv6 networks.  It is designed to
+be used in place of router discovery and DHCPv6 on ad-hoc networks.
+.SH OPTIONS
+.TP
+.BI \-m " multicast-address"
+Speficy the link-local multicast address to be used by AHCP.
+.TP
+.BI \-p " port"
+Specify the UDP port number to be used by AHCP.
+.TP
+.BI \-a " authority-file"
+Run the daemon in authoritative mode, flooding data given in
+.IR authority-file .
+.I Authority-file
+may be generated with
+.BR ahcp-generate (8).
+.TP
+.B \-n
+Participate in the flooding protocol, but don't actually perform any
+configuration.
+.TP
+.B \-N
+Don't configure DNS.
+.TP
+.BI \-c " config-script"
+Use the given configuration script instead of
+.BR /usr/local/bin/ahcp-config.sh .
+.SH SEE ALSO
+.BR dhcpcd (8),
+.BR dhclient (8),
+.BR babel (8),
+.BR olsrd (8),
+.BR ahcp-generate (8),
+.BR ahcp-generate-address (8),
+.IR "The Ad-Hoc Configuration Protocol" .
+.SH AUTHOR
+Juliusz Chroboczek.

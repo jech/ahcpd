@@ -1,0 +1,47 @@
+.TH AHCP-GENERATE 8
+.SH NAME
+ahcp\-generate \- generate data for an authoritative ahcpd
+.SH SYNOPSIS
+.B ahcp\-generate
+.IR option ...
+.B >
+.I ahcp.dat
+.SH DESCRIPTION
+.B Ahcp-generate
+generates the data needed by
+.B ahcpd
+to run in authoritative mode.
+.SH OPTIONS
+.TP
+.BI \-p " prefix"
+Specify the /64 prefix that nodes will use for autoconfiguration.
+.TP
+.BI \-P " protocol"
+Specify the routing protocol that nodes will use.  This can be one of
+.BR static ,
+.B OLSR
+or
+.BR Babel .
+.TP
+.BI \-g " gateway"
+For the routing protocol
+.BR static ,
+specify the default gateway that hosts will use.
+.TP
+.BI \-N " name\-server"
+Specify the IPv6 address of the name server that nodes will use.
+.TP
+.BI \-e " expire"
+Specify the time in seconds for which this configuration will be
+valid.  The default is 4 months.
+.SH BUGS
+This program is grossly incomplete.  The
+.B ahcpd
+daemon is capable of using many more configuration options than what can
+be generated with
+.BR ahcp-generate .
+.SH SEE ALSO
+.BR ahcpd (8),
+.IR "The Ad-Hoc Configuration Protocol" .
+.SH AUTHOR
+Juliusz Chroboczek.

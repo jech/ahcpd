@@ -1,0 +1,497 @@
+                  The Ad-Hoc Configuration Protocol
+
+                          Juliusz Chroboczek
+                         <jch@pps.jussieu.fr>
+
+                             3 June 2007
+
+
+Requirements notation
+
+The key words ``SELF-ADAPTING'', ``INTELLIGENT'' and ``BATTLE SCENARIO''
+in this document are to be interpreted as described in [RFC1149].
+
+For the sake of simplicity, we use the term ``broadcast'' to mean multicast.
+
+1. Introduction
+
+AHCP is a protocol for flooding a moderately-sized block of configu-
+ration information throughout an IPv6 internetwork.  It is designed to
+be used in place of router discovery [RFC2461] and DHCPv6 [RFC3315] on
+non-broadcast networks, for example mobile ad-hoc networks.
+
+AHCP is a peer-to-peer protocol: every participant in an AHCP network
+may act as a server at times.  AHCP peers come in two configurations:
+authoritative peers, that are preconfigured with data that is expected
+to be current, and that only provide replies, and ordinary peers, that
+accept replies and forward them to other peers.
+
+AHCP is a layered protocol: the transport sublayer is only concerned
+with flooding data, while the configuration sublayer decides what to
+do with this data.  The transport sublayer is designed to be as simple
+and as obviously correct as possible; the configuration sublayer,
+which needs to carry random sundry data, is by necessity more messy.
+
+
+2. The transport sublayer
+
+There are two kinds of AHCP messages: queries and replies.  An AHCP
+query consists of a header only; it requests that any peer in range
+that has valid data broadcast an AHCP reply.
+
+An AHCP reply consists of a header and a body.  The header contains
+the absolute and relative times at which this message was originated
+by an authoritative peer, and the absolute time at which this message
+expires (ceases to be valid for configuration purposes).  The
+inclusion of both relative and absolute times allows for protection
+against both clock skew and clock stepping.
+
+1.1 Reply validation
+
+Let t be the current time, as expressed in seconds since 1 January
+1970 UTC.  A peer that has a working real-time clock considers a reply
+with header (origin, expires, age) as valid when the following two
+conditions are satisfied:
+
+  - t < expires;
+  - age < expires - origin.
+
+The first condition is conservative in the face of clock stepping; the
+second is conservative in the face of incorrect clocks.
+
+A peer that does not have a working real-time clock checks the second
+condition only.
+
+A peer SHOULD perform additional checks when validating a reply,
+notably checking that the body is well-formed and that the values
+contained therein are reasonable.  Such checks are not required,
+however, in order to make it possible to implement AHCP forwarders
+that grok the transport sublayer only.
+
+
+1.2 Authoritative operation
+
+An authoritative peer is configured with a message body to broadcast.
+Whenever it receives a query, or if no reply has been sent in the
+last AHCP_UNSOLICITED_REPLY seconds, it waits for a random interval
+between 1/2 * AHCP_JITTER and 3/2 * AHCP_JITTER, then broadcasts an
+AHCP reply.  It sets the reply's header fields to the following
+values:
+
+  - origin: the current UTC time, in seconds since January 1 1970;
+  - expires: the current time plus at least twice AHCP_UNSOLICITED_REPLY;
+  - age: 0.
+
+An authoritative peer never sends AHCP queries.
+
+
+1.3 Non-authoritative operation
+
+A non-authoritative peer has two states: unconfigured and configured.
+It starts in the unconfigured state.
+
+In the configured state, the peer maintains the following variables:
+
+  - config_origin: the origin value of the reply that caused configuration;
+  - config_expires: the expires value of the reply that caused configuration;
+  - config_age: an estimate of the time elapsed between the reply that caused
+    configuration was sent by an authoritative peer and received by this peer;
+  - config_data: the body of the reply that caused configuration.
+
+1.3.1 Unconfigured operation
+
+When it is unconfigured, a peer sends a query at random intervals
+chosen between 1/2 * AHCP_UNCONFIGURED_INTERVAL and
+3/2 * AHCP_UNCONFIGURED_INTERVAL.
+
+An unconfigured peer silently ignores any queries that it receives.
+
+Upon receiving a reply, an unconfigured peer validates it; if the
+reply passes validation, it stores the values obtained from the
+message, passes the message body to the configuration layer, and
+switches to the configured state.
+
+1.3.2 Configured operation
+
+A configured peer pays attention to both requests and replies.  When
+it receives a request, it waits for a random interval between 1/2 *
+AHCP_JITTER and 3/2 * AHCP_JITTER, then broadcasts a reply.  It sets
+the header fields of the reply to the following values:
+
+  - origin: the value of config_origin;
+  - expires: the value of config_expires;
+  - age: config_age plus the number of seconds that elapsed since the
+    reply was received, rounded upwards.
+
+When a query was received on a wired network, the peer MAY suppress
+sending the reply if it hears a valid reply from a different peer on
+the same interface.  This suppression MUST NOT be done on wireless
+networks, since such networks are not guaranteed to be transitive.
+
+When it receives a reply, a configured peer validates it; if the reply
+has an origin time that is more recent that the currently stored
+reply, the peer passes it to the configuration sublayer for
+reconfiguration and replaces the stored values with the values
+obtained from the reply.
+
+If no new valid replies are received for an extended period of time,
+it may happen that the currently stored messages ceases being valid.
+At that point, the peer discards the stored message, request
+deconfiguration from the configuration sublayer, and switches to the
+unconfigured state.
+
+A configured peer SHOULD send periodic AHCP queries shortly before the
+configured data expires.
+
+1.3 Packet format
+
+An AHCP message is sent in a UDP packet to a well-known link-local
+multicast group and port.  We are currently running AHCP on the
+multicast group ff02::cca6:c0f9:e182:5359 and port 5359.
+
+AHCP messages MUST be sent with a hop limit of 255.  An AHCP peer
+SHOULD check that received AHCP messages have a hop limit of 255,
+i.e. that they could not have been forwarded by a router.
+
+If an AHCP message cannot fit in a link-layer packet, it is sent using
+the normal network-layer fragmentation mechanism of IPv6 (PMTU
+discovery is not used).  Every AHCP peer MUST be able to accept
+messages of at least 1452 octets (the IPv6 minimum maximum packet size
+minus 40 bytes of IPv6 header and 8 bytes of UDP header).  In order to
+avoid fragmentation, AHCP nodes SHOULD NOT send messages that are
+larger than 1232 bytes (the IPv6 minimum maximum unfragmented packet
+size minus 40 bytes of IPv6 header and 8 bytes of UDP header).
+
+Every AHCP message starts with the following four bytes:
+
+  - magic: 1 byte;
+  - version: 1 byte;
+  - opcode: 1 byte;
+  - reserved: 1 byte.
+
+Magic is the value 43, version is the value 0; both values MUST be
+checked on reception, and any packets with incorrect values in these
+fields must be ignored.  Opcode is 0 for a query, 1 for a reply.
+The reserved field MUST be sent as 0, and MUST be ignored on
+reception.
+
+An AHCP query only carries the common header; any data following the
+common header MUST be silently ignored.
+
+An AHCP reply has the following structure:
+
+  - common header: 4 bytes;
+  - origin: 4 bytes;
+  - expires: 4 bytes;
+  - age: 2 bytes;
+  - body length: 2 bytes:
+  - body: variable.
+
+Origin and expires are the origin and expiration times, respectively,
+expressed as seconds since 1 January 1970 in network byte order.  Age
+is the age of this reply, expressed as relative seconds, in network
+byte order.  The body length is the length of the following body,
+expressed as a number of bytes in network byte order.
+
+Any data following the body MUST be silently ignored.
+
+
+2. Configuration sublayer.
+
+The configuration sublayer is responsible for configuring the
+operating system for networked operation according to the parameters
+included in an AHCP message body.  Since these actions are by
+necessity specific to a given implementation, they are not specified
+in this document; however, they usually involve one or more of the
+following actions:
+
+  - setting up interface addresses from an IPv6 prefix provided by
+    AHCP and either an interface's hardware address or a randomly
+    drawn bit string;
+  - setting up static routes from the information provided
+    by AHCP;
+  - setting up a routing daemon;
+  - setting application-layer parameters, such as the addresses of DNS
+    and NTP servers.
+
+After deciding on a nework-layer address, a peer SHOULD perform
+link-local duplicate address detection.  Before actively participating
+in a routing protocol, a peer MAY perform duplicate address detection
+local to the routing domain by snooping on routing messages; such
+detection may be difficult, however, as with most routing protocols it
+is impossible to distinguish between a duplicate address and stale
+messages originated by a previous incarnation of the current node.
+
+The body of an AHCP message consists of a series of configuration
+options.  With the exception of the options PAD and MANDATORY, which
+are exactly one octet long, all options have the following format:
+
+    code: 1 octet
+    length: 1 octet
+    option-data: variable
+
+The code field contains a value that uniquely identifies the option.
+The length field contains the length of the following option data
+(i.e. excluding the code and length field).
+
+
+2.1 Defined options
+
+2.1.1 One-octet options
+
+The options PAD and MANDATORY are exactly one octet long.
+
+PAD:
+
+  code: 1 octet
+
+The option PAD has no effect.  It may be used for padding.  Or not.
+
+
+MANDATORY:
+
+  code: 1 octet
+
+The option MANDATORY indicates that the next option MUST be parsed and
+acted upon by the receiving peer.  If the peer does not recognise the
+next option, it MUST NOT configure its networking parameters according
+to the remaining options.
+
+2.1.2 General options
+
+EXPIRES: contains the time at which this block of data stops being
+suitable for configuration.
+
+    code: 1 octet
+    length: 1 octet
+    prefix: 4 octets
+
+This option allows a network manager to ensure that a block of data is
+no longer used after a given date, even if stray authoritative peers
+continue broadcasting it.  This option, if present, is usually marked
+as mandatory with the MANDATORY option.
+
+
+IPv6_PREFIX: contains the IPv6 prefix used on the network.  A prefix
+length of /64 is implied.
+
+    code: 1 octet
+    length: 1 octet
+    prefix: 16 octets
+
+This option is normally marked as mandatory with the MANDATORY option.
+
+
+ROUTING_PROTOCOL: specifies the routing protocol to use on the network
+
+    code: 1 octet
+    length: 1 octet
+    routing protocol: 1 octet
+    routing suboptions: variable
+
+This option is usually marked as mandatory; if absent, its value
+defaults to ROUTING_PROTOCOL_STATIC.  It is described in more detail
+in Section 3.2 below.
+
+This option is normally marked as mandatory with the MANDATORY option.
+
+
+NAME_SERVER: specifies one or more DNS [RFC1035] name servers that can
+be used.  The DNS servers are assumed to be equivalent.
+
+    code: 1 octet
+    length: 1 octet
+    name server addresses: 16 * n octets
+
+
+NTP_SERVER: specifies one or more (S)NTP servers [RFC4330] that can be used.
+
+    code: 1 octet
+    length: 1 octet
+    NTP server addresses: 16 * n octets
+
+
+3.2 Defined routing algorithms and suboptions
+
+The option ROUTING_PROTOCOL carries an identifier of the routing
+protocol to be used on the ad-hoc network, and a number of routing
+suboptions.  Routing suboptions are formatted just like options, and
+the same convention is used for distinguishing between mandatory and
+optional options.
+
+
+3.2.1 Generic suboptions
+
+The suboptions PAD and MANDATORY are defined for all routing
+protocols; they behave just like the similarly-named top-level
+options.
+
+
+3.2.2 ROUTING_PROTOCOL_STATIC
+
+If the routing protocol is specified as ROUTING_PROTOCOL_STATIC, there
+is no routing internal to the network.  However, there are one or more
+gateways that may be used to access hosts that are not directly connected.
+
+ROUTING_PROTOCOL_STATIC is not strictly necessary, as the same effect
+can be achieved with the normal router discovery mechanisms [RFC2461].
+However, using AHCP may be preferable when it is not desirable to
+deploy router advertisements on an ad-hoc network, for example when
+sharing a wireless medium between multiple networks.  Furthermore,
+AHCP may be more robust when some nodes are temporarily isolated from
+the gateways.
+
+The suboption STATIC_DEFAULT_GATEWAY specifies the default gateways
+available.
+
+    code: 1 octet
+    length: 1 octet
+    gateway addresses: 16 * n octets
+
+The gateway to use should be chosen using the normal neighbour
+discovery procedures.  No provision is made for router preferences or
+for advertising non-default gateways (gateways routing a prefix more
+specific than ::/0).
+
+
+3.2.3 ROUTING_PROTOCOL_OLSR
+
+If the routing protocol is specified as ROUTING_PROTOCOL_OLSR, nodes
+on the network participate in the OLSR protocol [RFC3626].  A number
+of suboptions are specified that specify the operation of OLSR.
+
+OLSR_MULTICAST_ADDRESS:
+
+    code: 1 octet
+    length: 1 octet
+    multicast address: 16 octets
+
+This option specifies the multicast address that carries OLSR traffic.
+It is marked as mandatory.
+
+
+OLSR_HELLO_INTERVAL
+OLSR_HELLO_VALIDITY
+OLSR_TC_INTERVAL
+OLSR_TC_VALIDITY
+OLSR_HNA_INTERVAL
+OLSR_HNA_VALIDITY
+OLSR_MIA_INTERVAL
+OLSR_MIA_VALIDITY
+
+    code: 1 octet
+    length: 1 octet
+    value: 2 octets
+
+These options specify the OLSR protocol parameters, in units of one
+100th of a second.  If not specified, they default to the values
+specified in Section 18 of [RFC3626].
+
+These options are optional: they MAY be overridden by local configuration.
+
+
+OLSR_LINK_QUALITY:
+
+    code: 1 octet
+    length: 1 octet
+    link quality: 1 octet
+
+The value of this option, which must be 1 or 2, specifies whether to
+use the link quality algorithm implemented by the olsr.org daemon.  If
+absent, it defaults to 0 (``RFC 3626 mode'').
+
+This option is marked as mandatory: a node that does not implement
+a specified value for link quality MUST unconfigure when it encounters
+this option.  This option MUST NOT be overridden by local configuration.
+
+
+OLSR_FISH_EYE:
+
+    code: 1 octet
+    length: 1 octet
+    fish eye: 1 octet
+
+This option, the value of which must be 1, specifies whether to use
+the experimental Fish Eye algorithm, as implemented by the olsr.org
+daemon.  This option is optional, and MAY be overriden by local
+configuration.
+
+
+3.2.4 ROUTING_PROTOCOL_BABEL
+
+If the routing protocol is specified as ROUTING_PROTOCOL_BABEL,
+nodes on the network participate in the Babel routing protocol
+[BABEL].  A number of suboptions specify the operation of Babel.
+
+BABEL_MULTICAST_ADDRESS
+
+    code: 1 octet
+    length: 1 octet
+    multicast address: 16 octets
+
+This option specifies the multicast address that carries OLSR traffic.
+It is marked as mandatory.
+
+BABEL_PORT_NUMBER
+
+    code: 1 octet
+    length: 1 octet
+    port number: 2 octets
+
+This option specifies the UDP port on which Babel operates.  It is
+marked as mandatory.
+
+BABEL_HELLO_INTERVAL
+
+    code: 1 octet
+    length: 1 octet
+    hello interval: 2 octets
+
+This option specifies the preferred hello interval for the Babel
+protocol.  It is normally not marked as mandatory, and may be overridden.
+
+
+5. Security considerations
+
+As defined in this document, AHCP is a completely insecure protocol:
+in the absence of link-layer security, anyone can inject spoofed AHCP
+packets in the network.
+
+A future specification will define means for securing AHCP.  As the
+whole AHCP body is immutable in transit, it can be signed offline; the
+provision of ignoring any data following the body is designed to allow
+including a cryptographic signature over the body in all AHCP replies.
+The EXPIRES option, which is part of the body and hence protected by
+the signature, protects against replay attacks.
+
+
+6. Sample implementation
+
+An experimental implementation of this protocol can be found on
+
+    http://www.pps.jussieu.fr/~jch/software/files/
+
+
+References
+
+[RFC1035] Domain names - implementation and specification.
+          P.V. Mockapetris.  November 1987.
+
+[RFC1149] Standard for the transmission of IP datagrams on avian carriers.
+          D. Waitzman.  April 1 1990.
+
+[RFC2461] Neighbor Discovery for IP Version 6 (IPv6).  T. Narten,
+          E. Nordmark, W. Simpson.  December 1998.
+
+[RFC3315] Dynamic Host Configuration Protocol for IPv6 (DHCPv6).
+          R. Droms, Ed., J. Bound, B. Volz, T. Lemon, C. Perkins,
+          M. Carney. July 2003.
+
+[RFC3626] Optimized Link State Routing Protocol (OLSR). T. Clausen, Ed.,
+          P. Jacquet, Ed.. October 2003.
+
+[RFC4330] Simple Network Time Protocol (SNTP) Version 4 for IPv4, IPv6 and
+          OSI. D. Mills. January 2006.
+
+[BABEL]   The Babel routing protocol.  Juliusz Chroboczek, personal
+          communication.  2007.

@@ -1,0 +1,54 @@
+.TH AHCP-GENERATE-ADDRESS 8
+.SH NAME
+ahcp\-generate\-address \- perform IPv6 address generation
+.SH SYNOPSIS
+.B ahcp\-generate\-address
+[
+.B \-p
+] {
+.B \-r
+|
+.I prefix
+} [
+.I mac\-48
+]
+.SH DESCRIPTION
+.B Ahcp\-generate\-address
+generates IPv6 addresses from a given prefix and either a given MAC-48
+address (an Ethernet hadrware address) or a randomly drawn host
+number.  It is usually invoked by the
+.B ahcpd
+daemon, but may also be used directly.
+.SH OPTIONS
+.TP
+.B \-p
+Generate a /64 prefix rather than a node address.
+.TP
+.B \-r
+Use a randomly generated RFC 4193 prefix.
+.TP
+.I prefix
+Use the given /64 prefix.
+.TP
+.I mac\-48
+Generate a host number from the given MAC\-48 address.  If omitted,
+the host number is drawn randomly (and the universal/global bit is set
+to zero).
+.SH EXAMPLES
+Generate a host number from a given prefix and MAC-48 address:
+.IP
+$ ahcp-generate-address 2001:DB8:1234:5678:: 01:23:45:67:89:ab
+.PP
+Generate a host number from a given prefix and a randomly chosen host number:
+.IP
+$ ahcp-generate-address 2001:DB8:1234:5678::
+.PP
+Generate an RFC 4193 prefix:
+.IP
+$ ahcp-generate-address -p -r
+.PP
+.SH SEE ALSO
+.BR ahcpd (8).
+.SH AUTHOR
+Juliusz Chroboczek.
+
