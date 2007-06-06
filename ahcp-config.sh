@@ -17,6 +17,12 @@ olsrd_pidfile=/var/run/ahcp_olsrd_pid
 babel_pidfile=/var/run/ahcp_babel_pid
 usage="Usage: $0 (start|stop)"
 debuglevel=${AHCP_DEBUG_LEVEL:-1}
+if [ grep -q ' ' "$AHCP_PREFIX" ] ; then
+    echo "Warning: multiple prefixes not supported yet."
+    prefix="$(echo $AHCP_PREFIX | sed 's/ .*//')"
+else
+    prefix="${AHCP_PREFIX:--r}"
+fi
 
 [ $# -eq 1 ] || die "$usage"
 
@@ -41,7 +47,6 @@ findcmd ip iproute
 if_address() {
     l="$(ip -0 addr show dev "$1" | grep '^ *link/ether ' | head -n 1)"
     mac="$(echo "$l" | sed 's|^ *link/ether \([0-9a-z:]*\) .*$|\1|')"
-    prefix="${AHCP_PREFIX:--r}"
     ahcp-generate-address $prefix $mac
 }
 
