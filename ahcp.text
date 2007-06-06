@@ -272,8 +272,8 @@ continue broadcasting it.  This option, if present, is usually marked
 as mandatory with the MANDATORY option.
 
 
-IPv6_PREFIX: contains the IPv6 prefix used on the network.  A prefix
-length of /64 is implied.
+IPv6_PREFIX: one or more IPv6 prefixes to be used on the network.
+A prefix length of /64 is implied.
 
     code: 1 octet
     length: 1 octet
