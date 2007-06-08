@@ -17,7 +17,7 @@ olsrd_pidfile=/var/run/ahcp_olsrd_pid
 babel_pidfile=/var/run/ahcp_babel_pid
 usage="Usage: $0 (start|stop)"
 debuglevel=${AHCP_DEBUG_LEVEL:-1}
-if [ grep -q ' ' "$AHCP_PREFIX" ] ; then
+if (echo "$AHCP_PREFIX" | grep -q ' ') ; then
     echo "Warning: multiple prefixes not supported yet."
     prefix="$(echo $AHCP_PREFIX | sed 's/ .*//')"
 else
