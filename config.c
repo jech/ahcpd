@@ -270,15 +270,16 @@ parse_data(const unsigned char *data, int len, int start, char **interfaces)
                     }
                     babel_hello_interval = ((data[j + 2] << 8) | data[j + 3]);
                 } else {
-                    fprintf(stderr, "Unknown suboption %d\n", oopt);
-                    if(omandatory)
-                        return -1;
+                    if(omandatory || debug_level >= 1)
+                        fprintf(stderr, "Unknown suboption %d\n", oopt);
+                    if(omandatory) return -1;
                 }
                 omandatory = 0;
                 j += oolen + 2;
             }
         } else {
-            fprintf(stderr, "Unsupported option %d\n", opt);
+            if(mandatory || debug_level >= 1)
+                fprintf(stderr, "Unsupported option %d\n", opt);
             if(mandatory) return -1;
         }
         mandatory = 0;
