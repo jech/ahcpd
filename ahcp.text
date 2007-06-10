@@ -3,7 +3,7 @@
                           Juliusz Chroboczek
                          <jch@pps.jussieu.fr>
 
-                             3 June 2007
+                             10 June 2007
 
 
 Requirements notation
@@ -18,13 +18,16 @@ For the sake of simplicity, we use the term ``broadcast'' to mean multicast.
 AHCP is a protocol for flooding a moderately-sized block of configu-
 ration information throughout an IPv6 internetwork.  It is designed to
 be used in place of router discovery [RFC2461] and DHCPv6 [RFC3315] on
-non-broadcast networks, for example mobile ad-hoc networks.
+networks where it is difficult or impossible to configure a server
+within every link-layer broadcast domain, for example mobile ad-hoc
+networks.
 
 AHCP is a peer-to-peer protocol: every participant in an AHCP network
-may act as a server at times.  AHCP peers come in two configurations:
-authoritative peers, that are preconfigured with data that is expected
-to be current, and that only provide replies, and ordinary peers, that
-accept replies and forward them to other peers.
+may act as a server at times.  AHCP peers, however, come in two
+configurations: authoritative peers, that are preconfigured with data
+that are by definition current and that originate replies, and
+non-authoritative peers, that accept replies and forward them to other
+(non-authoritative) peers.
 
 AHCP is a layered protocol: the transport sublayer is only concerned
 with flooding data, while the configuration sublayer decides what to
@@ -39,28 +42,37 @@ There are two kinds of AHCP messages: queries and replies.  An AHCP
 query consists of a header only; it requests that any peer in range
 that has valid data broadcast an AHCP reply.
 
-An AHCP reply consists of a header and a body.  The header contains
-the absolute and relative times at which this message was originated
-by an authoritative peer, and the absolute time at which this message
-expires (ceases to be valid for configuration purposes).  The
-inclusion of both relative and absolute times allows for protection
+An AHCP reply consists of a header and a body.  The header of a reply
+contains the following three values:
+
+  - origin: the absolute time at which this message was originated;
+  - expires: the absolute time at which this message is no longer
+    usable;
+  - age: the time in seconds since this message was originated.
+
+The inclusion of both relative and absolute times allows for protection
 against both clock skew and clock stepping.
 
 1.1 Reply validation
 
 Let t be the current time, as expressed in seconds since 1 January
-1970 UTC.  A peer that has a working real-time clock considers a reply
-with header (origin, expires, age) as valid when the following two
-conditions are satisfied:
+1970 UTC.  A peer that has a reasonably accurate real-time clock
+considers a reply with header (origin, expires, age) as valid when the
+following two conditions are satisfied:
 
   - t < expires;
   - age < expires - origin.
 
-The first condition is conservative in the face of clock stepping; the
-second is conservative in the face of incorrect clocks.
+If either of these checks fails, the peer MUST silently discard the
+received reply.
 
 A peer that does not have a working real-time clock checks the second
 condition only.
+
+The inclusion of both tests protects against clock stepping and clock
+skew, but not both simultaneously.  In other words, a peer will never
+forward stale data if it either has an accurate estimate of the
+current time or is able to accurately measure time intervals.
 
 A peer SHOULD perform additional checks when validating a reply,
 notably checking that the body is well-formed and that the values
@@ -129,19 +141,19 @@ the same interface.  This suppression MUST NOT be done on wireless
 networks, since such networks are not guaranteed to be transitive.
 
 When it receives a reply, a configured peer validates it; if the reply
-has an origin time that is more recent that the currently stored
+has an origin time that is more recent than the currently stored
 reply, the peer passes it to the configuration sublayer for
 reconfiguration and replaces the stored values with the values
 obtained from the reply.
 
 If no new valid replies are received for an extended period of time,
-it may happen that the currently stored messages ceases being valid.
-At that point, the peer discards the stored message, request
-deconfiguration from the configuration sublayer, and switches to the
-unconfigured state.
+it will eventually happen that the currently stored messages ceases
+being valid.  At that point, the peer discards the stored message,
+requests deconfiguration from the configuration sublayer, and switches
+to the unconfigured state.
 
-A configured peer SHOULD send periodic AHCP queries shortly before the
-configured data expires.
+A configured peer SHOULD send a small number of AHCP queries shortly
+before the configured data expires.
 
 1.3 Packet format
 
@@ -153,12 +165,12 @@ AHCP messages MUST be sent with a hop limit of 255.  An AHCP peer
 SHOULD check that received AHCP messages have a hop limit of 255,
 i.e. that they could not have been forwarded by a router.
 
-If an AHCP message cannot fit in a link-layer packet, it is sent using
-the normal network-layer fragmentation mechanism of IPv6 (PMTU
+If an AHCP message cannot fit in a network-layer packet, it is sent
+using the normal network-layer fragmentation mechanism of IPv6 (PMTU
 discovery is not used).  Every AHCP peer MUST be able to accept
 messages of at least 1452 octets (the IPv6 minimum maximum packet size
 minus 40 bytes of IPv6 header and 8 bytes of UDP header).  In order to
-avoid fragmentation, AHCP nodes SHOULD NOT send messages that are
+avoid fragmentation, AHCP peers SHOULD NOT send messages that are
 larger than 1232 bytes (the IPv6 minimum maximum unfragmented packet
 size minus 40 bytes of IPv6 header and 8 bytes of UDP header).
 
@@ -208,9 +220,8 @@ following actions:
   - setting up interface addresses from an IPv6 prefix provided by
     AHCP and either an interface's hardware address or a randomly
     drawn bit string;
-  - setting up static routes from the information provided
-    by AHCP;
-  - setting up a routing daemon;
+  - setting up static routes from the information provided by AHCP;
+  - starting a routing daemon;
   - setting application-layer parameters, such as the addresses of DNS
     and NTP servers.
 
@@ -257,6 +268,7 @@ acted upon by the receiving peer.  If the peer does not recognise the
 next option, it MUST NOT configure its networking parameters according
 to the remaining options.
 
+
 2.1.2 General options
 
 EXPIRES: contains the time at which this block of data stops being
@@ -266,10 +278,10 @@ suitable for configuration.
     length: 1 octet
     prefix: 4 octets
 
-This option allows a network manager to ensure that a block of data is
-no longer used after a given date, even if stray authoritative peers
-continue broadcasting it.  This option, if present, is usually marked
-as mandatory with the MANDATORY option.
+This option allows a human administrator to ensure that a block of
+data is no longer used after a given date, even if rogue authoritative
+peers continue broadcasting it.  This option, if present, is usually
+marked as mandatory with the MANDATORY option.
 
 
 IPv6_PREFIX: one or more IPv6 prefixes to be used on the network.
@@ -296,15 +308,16 @@ in Section 3.2 below.
 This option is normally marked as mandatory with the MANDATORY option.
 
 
-NAME_SERVER: specifies one or more DNS [RFC1035] name servers that can
-be used.  The DNS servers are assumed to be equivalent.
+NAME_SERVER: specifies one or more DNS [RFC1035] name servers that may
+be available on this network.  The DNS servers are assumed to be equivalent.
 
     code: 1 octet
     length: 1 octet
     name server addresses: 16 * n octets
 
 
-NTP_SERVER: specifies one or more (S)NTP servers [RFC4330] that can be used.
+NTP_SERVER: specifies one or more (S)NTP servers [RFC4330] that may be
+available on this network.
 
     code: 1 octet
     length: 1 octet
@@ -330,8 +343,9 @@ options.
 3.2.2 ROUTING_PROTOCOL_STATIC
 
 If the routing protocol is specified as ROUTING_PROTOCOL_STATIC, there
-is no routing internal to the network.  However, there are one or more
-gateways that may be used to access hosts that are not directly connected.
+is no routing internal to the network.  However, there may be one or
+more gateways that may be used to access hosts that are not directly
+connected.
 
 ROUTING_PROTOCOL_STATIC is not strictly necessary, as the same effect
 can be achieved with the normal router discovery mechanisms [RFC2461].
@@ -455,21 +469,23 @@ protocol.  It is normally not marked as mandatory, and may be overridden.
 
 As defined in this document, AHCP is a completely insecure protocol:
 in the absence of link-layer security, anyone can inject spoofed AHCP
-packets in the network.
+packets in the network.  This is no different from unsecured router
+discovery [RFC2461] or unsecured DHCPv6 [RFC3315].
 
-A future specification will define means for securing AHCP.  As the
-whole AHCP body is immutable in transit, it can be signed offline; the
-provision of ignoring any data following the body is designed to allow
-including a cryptographic signature over the body in all AHCP replies.
-The EXPIRES option, which is part of the body and hence protected by
-the signature, protects against replay attacks.
+A future specification will define means for end-to-end authentication
+of AHCP messages.  As the whole AHCP body is immutable in transit, it
+can be signed offline; the provision of ignoring any data following
+the body is designed to allow including a cryptographic signature over
+the body in all AHCP replies.  The EXPIRES option, which is part of
+the body and hence protected by the signature, protects against replay
+attacks.
 
 
 6. Sample implementation
 
 An experimental implementation of this protocol can be found on
 
-    http://www.pps.jussieu.fr/~jch/software/files/
+    http://www.pps.jussieu.fr/~jch/ahcp/
 
 
 References
