@@ -74,7 +74,8 @@ accept_data(unsigned char *data, int len, char **interfaces, int dummy)
 
     memcpy(new_data, data, len);
 
-    free(config_data);
+    if(config_data)
+        free(config_data);
     config_data = new_data;
     data_len = len;
 
@@ -82,7 +83,10 @@ accept_data(unsigned char *data, int len, char **interfaces, int dummy)
         rc = parse_data(config_data, data_len, 1, interfaces);
         if(rc < 0) {
             fprintf(stderr, "Ack!  Couldn't configure.\n");
-            return -2;
+            free(config_data);
+            config_data = NULL;
+            data_len = -1;
+            return -1;
         }
     }
 
