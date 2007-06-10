@@ -26,12 +26,9 @@ fi
 
 [ $# -eq 1 ] || die "$usage"
 
-if [ $debuglevel -ge 1 ]; then
-   env | grep AHCP
-fi
-
 if [ $debuglevel -ge 2 ]; then
-   set -x
+    set -x
+    env | grep AHCP
 fi
 
 interfaces="$AHCP_INTERFACES"
