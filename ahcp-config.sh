@@ -183,7 +183,13 @@ start_babel() {
     add_address $first_if $first_addr
     nameserver_start
 
-    babel -d $debuglevel $multicast $port $hello $options $first_addr $interfaces $more_interfaces &
+    if [ $debuglevel -le 2 ] ; then
+        babel_debuglevel=0
+    else
+        babel_debuglevel="$(expr $debuglevel - 2)"
+    fi
+
+    babel -d $babel_debuglevel $multicast $port $hello $options $first_addr $interfaces $more_interfaces &
     echo $! > $babel_pidfile
 }
 
