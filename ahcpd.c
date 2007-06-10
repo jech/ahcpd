@@ -226,6 +226,9 @@ main(int argc, char **argv)
         set_timeout(-1, REPLY, -1, 1);
     }
 
+    if(debug_level >= 2)
+        printf("Entering main loop.\n");
+
     while(1) {
         struct timeval tv = {0, 0};
         fd_set readfds;
@@ -253,6 +256,9 @@ main(int argc, char **argv)
         if(timeval_compare(&tv, &now) > 0) {
             timeval_minus(&tv, &tv, &now);
             FD_SET(s, &readfds);
+            if(debug_level >= 3)
+                printf("Sleeping for %d.%03ds.\n",
+                       (int)tv.tv_sec, (int)(tv.tv_usec / 1000));
             rc = select(s + 1, &readfds, NULL, NULL, &tv);
             if(rc < 0 && errno != EINTR) {
                 perror("select");
@@ -302,14 +308,20 @@ main(int argc, char **argv)
 
             if(buf[2] == 0) {
                 /* Query */
+                if(debug_level >= 2)
+                    printf("Received AHCP query.\n");
                 if(config_data)
                     set_timeout(i, REPLY, 3000, 0);
             } else if(buf[2] == 1) {
                 /* Reply */
                 unsigned int origin, expires;
                 unsigned short age, len;
-                if(rc < 16)
+                if(rc < 16) {
+                    fprintf(stderr, "Truncated AHCP packet.\n");
                     continue;
+                }
+                if(debug_level >= 2)
+                    printf("Received AHCP reply.\n");
                 memcpy(&origin, buf + 4, 4);
                 origin = ntohl(origin);
                 memcpy(&expires, buf + 8, 4);
@@ -319,7 +331,7 @@ main(int argc, char **argv)
                 memcpy(&len, buf + 18, 2);
                 len = ntohs(len);
                 if(rc < len + 20) {
-                    fprintf(stderr, "Truncated packet.\n");
+                    fprintf(stderr, "Truncated AHCP packet.\n");
                     continue;
                 }
 
@@ -359,6 +371,8 @@ main(int argc, char **argv)
             if(now.tv_sec >= data_expires ||
                now.tv_sec >= data_age_origin + data_expires - data_origin) {
                 /* Our data expired */
+                if(debug_level >= 2)
+                    printf("AHCP data expired.\n");
                 unaccept_data(interfaces, dummy);
                 data_expires = data_origin = data_age_origin = 0;
                 set_timeout(-1, QUERY, 3000, 0);
@@ -366,6 +380,8 @@ main(int argc, char **argv)
                       now.tv_sec >=
                       data_age_origin + data_expires - data_origin - 50) {
                 /* Our data is going to expire soon */
+                if(debug_level >= 2)
+                    printf("AHCP data about to expire.\n");
                 set_timeout(-1, QUERY, 10000, 0);
             }
         }
@@ -401,6 +417,8 @@ main(int argc, char **argv)
                 memcpy(&sin6.sin6_addr, &group, 16);
                 sin6.sin6_port = htons(port);
                 sin6.sin6_scope_id = networks[i].ifindex;
+                if(debug_level >= 2)
+                    printf("Sending AHCP reply on %s.\n", networks[i].ifname);
                 rc = ahcp_send(s, buf, 20 + data_len,
                                (struct sockaddr*)&sin6, sizeof(sin6));
                 if(rc < 0)
@@ -423,6 +441,8 @@ main(int argc, char **argv)
                 memcpy(&sin6.sin6_addr, &group, 16);
                 sin6.sin6_port = htons(port);
                 sin6.sin6_scope_id = networks[i].ifindex;
+                if(debug_level >= 2)
+                    printf("Sending AHCP request on %s.\n", networks[i].ifname);
                 rc = ahcp_send(s, buf, 4,
                                (struct sockaddr*)&sin6, sizeof(sin6));
                 if(rc < 0)
