@@ -22,3 +22,4 @@ THE SOFTWARE.
 
 extern int nodns;
 extern char *config_script;
+extern int debug_level;

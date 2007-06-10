@@ -307,7 +307,7 @@ parse_data(const unsigned char *data, int len, int start, char **interfaces)
             i++;
         }
         setenv("AHCP_INTERFACES", buf, 1);
-        snprintf(buf, 50, "%d", 0); /* XXX for now */
+        snprintf(buf, 50, "%d", debug_level);
         setenv("AHCP_DEBUG_LEVEL", buf, 1);
         if(routing_protocol_name)
             setenv("AHCP_ROUTING_PROTOCOL", routing_protocol_name, 1);
@@ -345,7 +345,8 @@ parse_data(const unsigned char *data, int len, int start, char **interfaces)
         case 1: action = "start"; break;
         default: abort();
         }
-        fprintf(stderr, "%s\n", config_script);
+        if(debug_level >= 1)
+            printf("Running ``%s %s''\n", config_script, action);
         execl(config_script, config_script, action, NULL);
         perror("exec failed");
         exit(42);

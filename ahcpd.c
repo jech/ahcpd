@@ -52,6 +52,7 @@ unsigned char buf[BUFFER_SIZE];
 unsigned int data_origin = 0, data_expires = 0, data_age_origin = 0;
 int nodns = 0;
 char *config_script = "/usr/local/bin/ahcp-config.sh";
+int debug_level = 1;
 
 struct network {
     char *ifname;
@@ -124,6 +125,11 @@ main(int argc, char **argv)
             i++;
             if(i >= argc) goto usage;
             config_script = argv[i];
+            i++;
+        } else if(strcmp(argv[i], "-d") == 0) {
+            i++;
+            if(i >= argc) goto usage;
+            debug_level = atoi(argv[i]);
             i++;
         } else {
             goto usage;
