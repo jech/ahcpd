@@ -36,6 +36,11 @@ Don't configure DNS.
 .BI \-c " config-script"
 Use the given configuration script instead of
 .BR /usr/local/bin/ahcp-config.sh .
+.TP
+.BI \-d " level"
+Set the debug level to
+.I level
+(default 1).
 .SH SEE ALSO
 .BR dhcpcd (8),
 .BR dhclient (8),
