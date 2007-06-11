@@ -187,7 +187,7 @@ main(int argc, char **argv)
     fd = open("/dev/urandom", O_RDONLY);
     if(fd < 0) {
         perror("open(random)");
-        seed ^= now.tv_sec ^ now.tv_usec;
+        seed = now.tv_sec ^ now.tv_usec;
     } else {
         rc = read(fd, &seed, sizeof(unsigned int));
         if(rc < sizeof(unsigned int)) {
