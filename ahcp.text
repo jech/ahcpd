@@ -3,7 +3,7 @@
                           Juliusz Chroboczek
                          <jch@pps.jussieu.fr>
 
-                             10 June 2007
+                             11 June 2007
 
 
 Requirements notation
@@ -11,16 +11,14 @@ Requirements notation
 The key words ``SELF-ADAPTING'', ``INTELLIGENT'' and ``BATTLE SCENARIO''
 in this document are to be interpreted as described in [RFC1149].
 
-For the sake of simplicity, we use the term ``broadcast'' to mean multicast.
-
 1. Introduction
 
 AHCP is a protocol for flooding a moderately-sized block of configu-
 ration information throughout an IPv6 internetwork.  It is designed to
 be used in place of router discovery [RFC2461] and DHCPv6 [RFC3315] on
-networks where it is difficult or impossible to configure a server
-within every link-layer broadcast domain, for example mobile ad-hoc
-networks.
+networks where it is difficult or impossible to configure a server or
+proxy within every link-layer broadcast domain, for example mobile
+ad-hoc networks.
 
 AHCP is a peer-to-peer protocol: every participant in an AHCP network
 may act as a server at times.  AHCP peers, however, come in two
@@ -74,11 +72,11 @@ skew, but not both simultaneously.  In other words, a peer will never
 forward stale data if it either has an accurate estimate of the
 current time or is able to accurately measure time intervals.
 
-A peer SHOULD perform additional checks when validating a reply,
-notably checking that the body is well-formed and that the values
-contained therein are reasonable.  Such checks are not required,
-however, in order to make it possible to implement AHCP forwarders
-that grok the transport sublayer only.
+A peer SHOULD perform additional checks when validating a reply, for
+example checking that the body is syntactically well-formed, that it
+is still valid, and that the values contained therein make sense.
+Such checks are not required, however, in order to make it possible to
+implement AHCP forwarders that grok the transport sublayer only.
 
 
 1.2 Authoritative operation
@@ -90,7 +88,7 @@ between 1/2 * AHCP_JITTER and 3/2 * AHCP_JITTER, then broadcasts an
 AHCP reply.  It sets the reply's header fields to the following
 values:
 
-  - origin: the current UTC time, in seconds since January 1 1970;
+  - origin: the current UTC time, in seconds since 1 January 1970;
   - expires: the current time plus at least twice AHCP_UNSOLICITED_REPLY;
   - age: 0.
 
@@ -126,9 +124,10 @@ switches to the configured state.
 1.3.2 Configured operation
 
 A configured peer pays attention to both requests and replies.  When
-it receives a request, it waits for a random interval between 1/2 *
-AHCP_JITTER and 3/2 * AHCP_JITTER, then broadcasts a reply.  It sets
-the header fields of the reply to the following values:
+it receives a request, or when no reply has been sent in the last
+AHCP_UNSOLICITED_REPLY seconds, it waits for a random interval between
+1/2 * AHCP_JITTER and 3/2 * AHCP_JITTER, then broadcasts a reply.  It
+sets the header fields of the reply to the following values:
 
   - origin: the value of config_origin;
   - expires: the value of config_expires;
@@ -220,8 +219,10 @@ following actions:
   - setting up interface addresses from an IPv6 prefix provided by
     AHCP and either an interface's hardware address or a randomly
     drawn bit string;
+  - performing link-local duplicate address detection;
+  - performing routing-domain-wide duplicate address detection;
   - setting up static routes from the information provided by AHCP;
-  - starting a routing daemon;
+  - starting a dynamic routing process;
   - setting application-layer parameters, such as the addresses of DNS
     and NTP servers.
 
@@ -276,7 +277,7 @@ suitable for configuration.
 
     code: 1 octet
     length: 1 octet
-    prefix: 4 octets
+    expires: 4 octets
 
 This option allows a human administrator to ensure that a block of
 data is no longer used after a given date, even if rogue authoritative
