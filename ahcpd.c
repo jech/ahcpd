@@ -92,10 +92,10 @@ valid(int nowsecs, int origin, int expires, int age)
     if(age >= expires - origin)
         return 0;
     if(time_broken(nowsecs))
-        return 1;
+        return expires - origin - age;
     if(nowsecs >= expires)
         return 0;
-    return 1;
+    return MIN(expires - origin - age, nowsecs - expires);
 }
 
 int
