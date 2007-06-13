@@ -20,6 +20,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
+#undef MAX
+#undef MIN
+
+#define MAX(x,y) ((x)<=(y)?(y):(x))
+#define MIN(x,y) ((x)<=(y)?(x):(y))
+
 extern int nodns;
 extern char *config_script;
 extern int debug_level;
