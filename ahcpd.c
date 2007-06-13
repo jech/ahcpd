@@ -80,6 +80,24 @@ void timeval_min_sec(struct timeval *d, int secs);
 void timeval_minus(struct timeval *d,
                    const struct timeval *s1, const struct timeval *s2);
 
+static int
+time_broken(int nowsecs)
+{
+    return nowsecs < 1000000000;
+}
+
+static int
+valid(int nowsecs, int origin, int expires, int age)
+{
+    if(age >= expires - origin)
+        return 0;
+    if(time_broken(nowsecs))
+        return 1;
+    if(nowsecs >= expires)
+        return 0;
+    return 1;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -238,16 +256,14 @@ main(int argc, char **argv)
             timeval_min(&tv, &networks[i].query_time);
             timeval_min(&tv, &networks[i].reply_time);
         }
-        if(!authority && data_expires > 0) {
-            if(now.tv_sec < data_expires - 50)
-                timeval_min_sec(&tv, data_expires - 50);
-            else
-                timeval_min_sec(&tv, data_expires);
-            if(now.tv_sec - data_age_origin + data_expires - data_origin - 50)
+        if(!authority && data_age_origin > 0) {
+            int data_age = now.tv_sec - data_age_origin;
+            /* Wake up 50 seconds before the data expires to send a query */
+            if(data_age < data_expires - data_origin - 50)
                 timeval_min_sec(&tv,
                                 data_age_origin + data_expires - data_origin -
                                 50);
-            else
+            else if(data_age < data_expires - data_origin)
                 timeval_min_sec(&tv,
                                 data_age_origin + data_expires - data_origin);
         }
@@ -255,6 +271,12 @@ main(int argc, char **argv)
         assert(tv.tv_sec != 0);
         if(timeval_compare(&tv, &now) > 0) {
             timeval_minus(&tv, &tv, &now);
+            if(time_broken(now.tv_sec)) {
+                /* If our clock is broken, it's likely someone (NTP?) is
+                   going to step the clock.  Wake up soon just in case. */
+                timeval_min_sec(&tv, 30);
+            }
+
             FD_SET(s, &readfds);
             if(debug_level >= 3)
                 printf("Sleeping for %d.%03ds.\n",
@@ -335,18 +357,20 @@ main(int argc, char **argv)
                     continue;
                 }
 
-                if(now.tv_sec >= expires || origin + age >= expires) {
-                    /* Stale message */
-                    if(config_data)
+                if(!valid(now.tv_sec, origin, expires, age)) {
+                    if(age > 0 && config_data) {
+                        /* The person sending stale data is not
+                           authoritative. */
                         set_timeout(i, REPLY, 10000, 0);
+                    }
                     continue;
                 }
 
                 if(authority)
                     continue;
 
-                if((!config_data || origin > data_origin) &&
-                   (now.tv_sec < expires && age < expires - origin)) {
+                if(valid(now.tv_sec, origin, expires, age) &&
+                   (!config_data || origin > data_origin)) {
                     /* More fresh than what we've got */
                     rc = accept_data(buf + 20, len, interfaces, dummy);
                     if(rc >= 0) {
@@ -357,7 +381,7 @@ main(int argc, char **argv)
                             data_age_origin = data_origin;
                         set_timeout(-1, QUERY, -1, 1);
                         if(rc > 0) {
-                            /* Different from what we had */
+                            /* Different from what we had, flood it further */
                             set_timeout(-1, REPLY, 3000, 0);
                         }
                     }
@@ -368,16 +392,15 @@ main(int argc, char **argv)
         }
 
         if(!authority && config_data) {
-            if(now.tv_sec >= data_expires ||
-               now.tv_sec >= data_age_origin + data_expires - data_origin) {
+            if(!valid(now.tv_sec, data_origin, data_expires,
+                      now.tv_sec - data_age_origin)) {
                 /* Our data expired */
                 if(debug_level >= 2)
                     printf("AHCP data expired.\n");
                 unaccept_data(interfaces, dummy);
                 data_expires = data_origin = data_age_origin = 0;
                 set_timeout(-1, QUERY, 3000, 0);
-            } else if(now.tv_sec >= data_expires - 50 ||
-                      now.tv_sec >=
+            } else if(now.tv_sec >=
                       data_age_origin + data_expires - data_origin - 50) {
                 /* Our data is going to expire soon */
                 if(debug_level >= 2)
@@ -391,6 +414,14 @@ main(int argc, char **argv)
                timeval_compare(&networks[i].reply_time, &now) <= 0) {
                 unsigned int origin, expires;
                 unsigned short age, len;
+
+                if(!config_data) {
+                    fprintf(stderr,
+                            "Attempted to send AHCP reply "
+                            "while unconfigured.\n");
+                    set_timeout(i, REPLY, -1, 1);
+                    continue;
+                }
 
                 if(authority) {
                     origin = htonl(now.tv_sec);
@@ -424,9 +455,9 @@ main(int argc, char **argv)
                 if(rc < 0)
                     perror("ahcp_send");
                 if(authority)
-                    set_timeout(i, REPLY, 240 * 1000, 1);
+                    set_timeout(i, REPLY, 120 * 1000, 1);
                 else
-                    set_timeout(i, REPLY, 600 * 1000, 1);
+                    set_timeout(i, REPLY, 300 * 1000, 1);
             }
 
             if(networks[i].query_time.tv_sec > 0 &&
