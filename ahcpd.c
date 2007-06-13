@@ -279,8 +279,8 @@ main(int argc, char **argv)
                 if(errno != EAGAIN && errno != EINTR) {
                     perror("recv");
                     sleep(5);
-                    continue;
                 }
+                continue;
             }
             for(i = 0; i < numnetworks; i++) {
                 if(networks[i].ifindex == sin6.sin6_scope_id)
