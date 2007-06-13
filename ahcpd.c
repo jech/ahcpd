@@ -371,6 +371,20 @@ main(int argc, char **argv)
                 if(valid(now.tv_sec, origin, expires, age) &&
                    (!config_data || origin > data_origin)) {
                     /* More fresh than what we've got */
+                    if(config_data && data_changed(buf + 20, len)) {
+                        /* In case someone puts two distinct authoritative
+                           configurations on the same network, we want to have
+                           some hysteresis.  We avoid any different data if
+                           either our data was confirmed very recently, or the
+                           data we're receiving is going to expire soon */
+                        if(valid(now.tv_sec, data_origin, data_expires,
+                                 now.tv_sec - data_age_origin) >= 50) {
+                            if(now.tv_sec - data_age_origin < 120)
+                                continue;
+                            if(valid(now.tv_sec, origin, expires, age) < 50)
+                                continue;
+                        }
+                    }
                     rc = accept_data(buf + 20, len, interfaces, dummy);
                     if(rc >= 0) {
                         data_origin = origin;
