@@ -43,6 +43,18 @@ parse_data(const unsigned char *data, int len, int start, char **interfaces);
 static char *parse_address_list(const unsigned char *data, int len);
 
 int
+data_changed(unsigned char *data, int len)
+{
+    if(!config_data)
+        return 1;
+
+    if(len == data_len && memcmp(config_data, data, len) == 0)
+        return 0;
+
+    return 1;
+}
+
+int
 accept_data(unsigned char *data, int len, char **interfaces, int dummy)
 {
     unsigned char *new_data;
@@ -51,10 +63,8 @@ accept_data(unsigned char *data, int len, char **interfaces, int dummy)
     if(len < 4)
         return -1;
 
-    if(config_data) {
-        if(len == data_len && memcmp(config_data, data, len) == 0)
+    if(!data_changed(data, len))
             return 0;
-    }
 
     rc = parse_data(data, len, -1, interfaces);
     if(rc < 0)

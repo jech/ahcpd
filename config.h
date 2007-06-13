@@ -23,5 +23,6 @@ THE SOFTWARE.
 extern unsigned char *config_data;
 extern int data_len;
 
+int data_changed(unsigned char *data, int len);
 int accept_data(unsigned char *data, int len, char **interfaces, int dummy);
 int unaccept_data(char **interfaces, int dummy);
