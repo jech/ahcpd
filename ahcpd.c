@@ -258,14 +258,13 @@ main(int argc, char **argv)
         }
         if(!authority && data_age_origin > 0) {
             int data_age = now.tv_sec - data_age_origin;
+            int valid_for =
+                valid(now.tv_sec, data_origin, data_expires, data_age);
             /* Wake up 50 seconds before the data expires to send a query */
-            if(data_age < data_expires - data_origin - 50)
-                timeval_min_sec(&tv,
-                                data_age_origin + data_expires - data_origin -
-                                50);
-            else if(data_age < data_expires - data_origin)
-                timeval_min_sec(&tv,
-                                data_age_origin + data_expires - data_origin);
+            if(valid_for >= 50)
+                timeval_min_sec(&tv, now.tv_sec + valid_for - 50);
+            else if(valid_for > 0)
+                timeval_min_sec(&tv, now.tv_sec + valid_for);
         }
 
         assert(tv.tv_sec != 0);
@@ -392,16 +391,17 @@ main(int argc, char **argv)
         }
 
         if(!authority && config_data) {
-            if(!valid(now.tv_sec, data_origin, data_expires,
-                      now.tv_sec - data_age_origin)) {
+            int valid_for =
+                valid(now.tv_sec, data_origin, data_expires,
+                      now.tv_sec - data_age_origin);
+            if(!valid_for) {
                 /* Our data expired */
                 if(debug_level >= 2)
                     printf("AHCP data expired.\n");
                 unaccept_data(interfaces, dummy);
                 data_expires = data_origin = data_age_origin = 0;
                 set_timeout(-1, QUERY, 3000, 0);
-            } else if(now.tv_sec >=
-                      data_age_origin + data_expires - data_origin - 50) {
+            } else if(valid_for <= 50) {
                 /* Our data is going to expire soon */
                 if(debug_level >= 2)
                     printf("AHCP data about to expire.\n");
