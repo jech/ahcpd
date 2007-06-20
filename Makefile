@@ -4,6 +4,8 @@ CDEBUGFLAGS = -Os -g -Wall
 
 CFLAGS = $(CDEBUGFLAGS) $(DEFINES) $(EXTRA_DEFINES)
 
+all: ahcpd ahcp-generate-address ahcp-generate
+
 ahcpd: ahcpd.o config.o
 	$(CC) $(CFLAGS) $(LDFLAGS) -o ahcpd ahcpd.o config.o $(LDLIBS)
 
@@ -13,7 +15,14 @@ ahcp-generate: ahcp-generate.o
 ahcp-generate-address: ahcp-generate-address.o
 	$(CC) $(CFLAGS) $(LDFLAGS) -o ahcp-generate-address ahcp-generate-address.o $(LDLIBS)
 
-all: ahcpd ahcp-generate-address ahcp-generate
+ahcpd.html: ahcpd.man
+	groff -man -Thtml ahcpd.man > ahcpd.html
+
+ahcp-generate.html: ahcp-generate.man
+	groff -man -Thtml ahcp-generate.man > ahcp-generate.html
+
+ahcp-generate-address.html: ahcp-generate-address.man
+	groff -man -Thtml ahcp-generate-address.man > ahcp-generate-address.html
 
 .PHONY: install
 
@@ -43,4 +52,6 @@ uninstall:
 .PHONY: clean
 
 clean:
-	-rm -f ahcpd ahcp-generate ahcp-generate-address *.o *~ core TAGS gmon.out
+	-rm -f ahcpd ahcp-generate ahcp-generate-address
+	-rm -f *.o *~ core TAGS gmon.out
+	-rm -f ahcpd.thml ahcp-generate.html ahcp-generate-address.html
