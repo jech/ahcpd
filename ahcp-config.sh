@@ -36,29 +36,52 @@ if [ -z "$interfaces" ]; then die "No interface set"; fi
 first_if="$(echo $interfaces | sed 's/ .*//')"
 other_if="$(echo $interfaces | sed 's/[^ ]*//')"
 
-findcmd ip iproute
+platform=`uname`
 
-(ip -6 addr show dev lo | grep -q 'inet6') || \
-    die "No IPv6 address on lo, please modprobe ipv6"
+if [ "$platform" = "Darwin" ]
+then
 
-if_address() {
-    l="$(ip -0 addr show dev "$1" | grep '^ *link/ether ' | head -n 1)"
-    mac="$(echo "$l" | sed 's|^ *link/ether \([0-9a-z:]*\) .*$|\1|')"
-    ahcp-generate-address $prefix $mac
-}
+    if_address() {
+	l="$(ifconfig "$1" | grep ether)"
+	mac="$(echo "$l" | sed 's|^.*ether \([0-9a-z:]*\) .*$|\1|')"
+	ahcp-generate-address $prefix $mac
+    }
+    
+    add_address() {
+	ifconfig "$1" inet6 "${2:-$(if_address $1)}$3"
+    }
+    
+    del_address() {
+	ifconfig "$1" inet6 "${2:-$(if_address $1)}$3" delete
+    }
 
-add_address() {
-    ip -6 addr add "${2:-$(if_address $1)}$3" dev "$1"
-}
+else
 
+    findcmd ip iproute
+
+    (ip -6 addr show dev lo | grep -q 'inet6') || \
+	die "No IPv6 address on lo, please modprobe ipv6"
+
+    if_address() {
+	l="$(ip -0 addr show dev "$1" | grep '^ *link/ether ' | head -n 1)"
+	mac="$(echo "$l" | sed 's|^ *link/ether \([0-9a-z:]*\) .*$|\1|')"
+	ahcp-generate-address $prefix $mac
+    }
+    
+    add_address() {
+	ip -6 addr add "${2:-$(if_address $1)}$3" dev "$1"
+    }
+    
+    del_address() {
+	ip -6 addr del "${2:-$(if_address $1)}$3" dev "$1"
+    }
+    
+fi
+    
 add_addresses() {
     for i in $interfaces; do
         add_address $i
     done
-}
-
-del_address() {
-    ip -6 addr del "${2:-$(if_address $1)}$3" dev "$1"
 }
 
 del_addresses() {
