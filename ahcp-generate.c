@@ -25,8 +25,14 @@ THE SOFTWARE.
 #include <unistd.h>
 #include <string.h>
 #include <netinet/in.h>
+#if defined(__APPLE__)
+#include <machine/endian.h>
+#include <libkern/OSByteOrder.h>
+#define bswap_64 OSSwapInt64
+#else
 #include <endian.h>
 #include <byteswap.h>
+#endif
 #include <sys/time.h>
 #include <time.h>
 #include <sys/types.h>
