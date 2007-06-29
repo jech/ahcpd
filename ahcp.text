@@ -160,9 +160,9 @@ An AHCP message is sent in a UDP packet to a well-known link-local
 multicast group and port.  We are currently running AHCP on the
 multicast group ff02::cca6:c0f9:e182:5359 and port 5359.
 
-AHCP messages MUST be sent with a hop limit of 255.  An AHCP peer
-SHOULD check that received AHCP messages have a hop limit of 255,
-i.e. that they could not have been forwarded by a router.
+AHCP messages SHOULD be sent with a hop limit of 1.  An AHCP peer
+SHOULD check that received AHCP messages have a link-local source
+address, i.e. that they could not have been forwarded by a router.
 
 If an AHCP message cannot fit in a network-layer packet, it is sent
 using the normal network-layer fragmentation mechanism of IPv6 (PMTU
