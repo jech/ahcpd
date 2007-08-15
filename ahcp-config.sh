@@ -212,7 +212,7 @@ start_babel() {
         babel_debuglevel="$(expr $debuglevel - 2)"
     fi
 
-    babel -d $babel_debuglevel $multicast $port $hello $options $first_addr $interfaces $more_interfaces &
+    babel -d $babel_debuglevel $multicast $port $hello $options -X $first_addr 0 $first_addr $interfaces $more_interfaces &
     echo $! > $babel_pidfile
 }
 
