@@ -435,9 +435,7 @@ main(int argc, char **argv)
                 unsigned short age, len;
 
                 if(!config_data) {
-                    fprintf(stderr,
-                            "Attempted to send AHCP reply "
-                            "while unconfigured.\n");
+                    /* This can happen if we expired in the meantime. */
                     set_timeout(i, REPLY, -1, 1);
                     continue;
                 }
