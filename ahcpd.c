@@ -335,8 +335,10 @@ main(int argc, char **argv)
                 /* Query */
                 if(debug_level >= 2)
                     printf("Received AHCP query.\n");
+                /* Since peers use an initial timeout of 2 seconds,
+                   this should be no more than 1.3s (due to jitter). */
                 if(config_data)
-                    set_timeout(i, REPLY, 3000, 0);
+                    set_timeout(i, REPLY, 1000, 0);
             } else if(buf[2] == 1) {
                 /* Reply */
                 unsigned int origin, expires;
