@@ -21,7 +21,7 @@ if (echo "$AHCP_PREFIX" | grep -q ' ') ; then
     echo "Warning: multiple prefixes not supported yet."
     prefix="$(echo $AHCP_PREFIX | sed 's/ .*//')"
 else
-    prefix="${AHCP_PREFIX:--r}"
+    prefix="${AHCP_PREFIX:--s -r}"
 fi
 
 [ $# -eq 1 ] || die "$usage"
