@@ -49,6 +49,7 @@ char *prefix = NULL;
 unsigned char routing_protocol = ROUTING_PROTOCOL_BABEL;
 char *default_gateway = NULL;
 char *name_server = NULL;
+char *ntp_server = NULL;
 unsigned char olsr_multicast_address[16] =
     { 0xff, 0x04, 0, 0, 0, 0, 0, 0,
       0xcc, 0xa6, 0xc0, 0xf9, 0xe1, 0x82, 0x53, 0x59 };
@@ -72,16 +73,20 @@ main(int argc, char **argv)
     } fourbytes;
     int i;
     char *usage =
-        "ahcp-generate -p prefix [-P protocol] [-g gw] [-n ns] [-e seconds] > ahcp.dat";
+        "ahcp-generate "
+        "-p prefix [-P protocol] [-g gw] [-n name-server] [N ntp-server]\n"
+        "              "
+        "[-e seconds] > ahcp.dat";
     int rc;
 
     while(1) {
         int c;
-        c = getopt(argc, argv, "p:n:g:P:e:");
+        c = getopt(argc, argv, "p:n:N:g:P:e:");
         if(c < 0) break;
         switch(c) {
         case 'p': prefix = optarg; break;
         case 'n': name_server = optarg; break;
+        case 'N': ntp_server = optarg; break;
         case 'g': default_gateway = optarg; break;
         case 'P':
             if(strcasecmp(optarg, "static") == 0)
@@ -218,6 +223,19 @@ main(int argc, char **argv)
         EMIT1(16);
         EMIT(n, 16);
     }
+
+    if(ntp_server) {
+        unsigned char n[16];
+        rc = inet_pton(AF_INET6, ntp_server, n);
+        if(rc < 0) {
+            fprintf(stderr, "Couldn't parse NTP server.\n");
+            exit(1);
+        }
+        EMIT1(OPT_NTP_SERVER);
+        EMIT1(16);
+        EMIT(n, 16);
+    }
+
     write(1, buf, i);
     return 0;
 
