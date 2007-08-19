@@ -113,6 +113,7 @@ main(int argc, char **argv)
     int fd, rc, s, i, j;
     unsigned int seed;
     int dummy = 0;
+    int expires_delay = 3600;
     int query_timeout = INITIAL_QUERY_TIMEOUT;
 
     i = 1;
@@ -136,6 +137,13 @@ main(int argc, char **argv)
             i++;
             if(i >= argc) goto usage;
             authority = argv[i];
+            i++;
+        } else if(strcmp(argv[i], "-e") == 0) {
+            i++;
+            if(i >= argc) goto usage;
+            expires_delay = atoi(argv[i]);
+            if(expires_delay <= 30)
+                goto usage;
             i++;
         } else if(strcmp(argv[i], "-n") == 0) {
             dummy = 1;
@@ -444,7 +452,7 @@ main(int argc, char **argv)
 
                 if(authority) {
                     origin = htonl(now.tv_sec);
-                    expires = htonl(now.tv_sec + 1200);
+                    expires = htonl(now.tv_sec + expires_delay);
                     age = htons(0);
                 } else {
                     origin = htonl(data_origin);
@@ -474,7 +482,9 @@ main(int argc, char **argv)
                 if(rc < 0)
                     perror("ahcp_send");
                 if(authority)
-                    set_timeout(i, REPLY, 120 * 1000, 1);
+                    set_timeout(i, REPLY, MIN(expires_delay * 1000 / 4,
+                                              120 * 1000),
+                                1);
                 else
                     set_timeout(i, REPLY, 300 * 1000, 1);
             }
@@ -520,9 +530,9 @@ main(int argc, char **argv)
  usage:
     fprintf(stderr,
             "Syntax: ahcpd "
-            "[-m group] [-p port] [-a authority_file] [-n] [-N] [-c script]\n"
+            "[-m group] [-p port] [-a authority_file] [-e expires] [-n] [-N]\n"
             "              "
-            "interface...\n");
+            "[-c script] interface...\n");
     exit(1);
 }
 
