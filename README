@@ -1,0 +1,119 @@
+Ahcpd is a daemon for configuring an IPv6 network using the Ad-Hoc
+Configuration Protocol (AHCP).  AHCP is designed for wireless mesh
+networks, where IPv6 autoconfiguration and DHCPv6 do not work, but may
+also be used on wired networks.
+
+
+Configuring a network to use AHCP
+*********************************
+
+1. Choose a network prefix
+--------------------------
+
+You will need to choose a /64 network prefix for your AHCP network.
+If you have a spare native or 6to4 /64 prefix, use that.  If you
+don't, you can use the included utility `ahcp-generate-address'' to
+choose one randomly for you:
+
+  $ ahcp-generate-address -p -r
+  fde6:20f5:c9ac::
+
+This generates a random /48 prefix.  You may use any of the /64
+prefixes within.
+
+2. Generate an AHCP configuration
+---------------------------------
+
+An AHCP configuration is a blob of binary data and is generated with
+ahcp-generate.  For example
+
+  $ ahcp-generate -p fde6:20f5:c9ac:: -P babel -n fde6:20f5:c9ac::1 > ahcp.dat
+
+Please see the ahcp-generate(8) manual page for more information about
+the possible flags.
+
+3. Configure an authoritative AHCP peer
+---------------------------------------
+
+You will need to configure at least one host on your AHCP network to
+be an ``authoritative'' AHCP peer.  Multiple authoritative peers may
+be configured for redundancy; an AHCP network will survive the loss of
+all authoritative peers for no more than one hour by default (this
+can be changed with the ``-e'' flag to ahcpd).
+
+On each authoritative AHCP peer, run
+
+  ahcpd -a /path/to/ahcp.dat eth1
+
+where eth1 is the interface on which you want the peer to participate
+in the AHCP protocol.  Multiple interfaces can be included, in which
+case the peer will provide AHCP configuration on all the interfaces.
+
+By default, the authoritative peers will be configured by AHCP just
+like the other ones.  You may want to keep the authoritative peers
+network configuration unchanged (for example because they use static
+routing); in that case, please see the use of the `-c' flag below.
+
+4. Run AHCP on your other hosts
+-------------------------------
+
+On each AHCP peer, run
+
+  ahcpd eth1
+
+where eth1 is the interface on which you want your peer to participate
+in the AHCP protocol.  Multiple interfaces can be included, in which
+case the peer will forward configuration information between interfaces.
+
+5. Configuring non-standard peers
+---------------------------------
+
+Some AHCP peers will need to use a non-standard configuration, for
+example because they are Internet gateways.  You can configure a peer
+manually, then tell ahcpd to not touch the network configuration by
+using the ``-c'' flag:
+
+  $ ahcpd -c /path/to/dummy-config.sh eth1
+
+If you are using OLSR, you can request that ahcpd add sections to the
+olsrd configuration file by creating a file
+
+  /usr/local/lib/ahcp/ahcp-olsrd.conf
+
+For example, on an Internet gateway this file will typically contain
+
+  Hna6 { :: 0 }
+  Willingness 6
+
+If you are using Babel, you can add random flags to the invocation of
+the babel daemon by creating a file
+
+  /usr/local/lib/ahcp/ahcp-babel-options
+
+For example, on an Internet gateway this file will typically contain
+
+  -x ::/0 128
+
+You can also specify any interfaces that you want to participate in
+the Babel protocol but not the AHCP protocol by listing them in the file
+
+  /usr/local/lib/ahcp/ahcp-babel-interfaces
+
+
+Extending AHCP
+**************
+
+AHCP can currently only provide information to configure static
+routing and dynamic routing using either OLSR or Babel.  In addition,
+it is only able to carry a subset of possible configuration data
+(notably prefix information and DNS and NTP servers).
+
+However, AHCP was designed to be an extensible protocol, and could
+conceivably be extended to carry all sorts of static configuration
+information (i.e. information that does not depend on the host it is
+sent to).  Please contact me if you want to define additional AHCP
+options.
+
+
+                                        Juliusz Chroboczek
+                                        <jch@pps.jussieu.fr>
