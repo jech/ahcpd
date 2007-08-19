@@ -98,6 +98,9 @@ valid(int nowsecs, int origin, int expires, int age)
     return MIN(expires - origin - age, nowsecs - expires);
 }
 
+#define INITIAL_QUERY_TIMEOUT 2000
+#define MAX_QUERY_TIMEOUT 30000
+
 int
 main(int argc, char **argv)
 {
@@ -110,6 +113,7 @@ main(int argc, char **argv)
     int fd, rc, s, i, j;
     unsigned int seed;
     int dummy = 0;
+    int query_timeout = INITIAL_QUERY_TIMEOUT;
 
     i = 1;
     while(i < argc && argv[i][0] == '-') {
@@ -240,7 +244,7 @@ main(int argc, char **argv)
         set_timeout(-1, QUERY, -1, 1);
         set_timeout(-1, REPLY, 5000, 1);
     } else {
-        set_timeout(-1, QUERY, 5000, 1);
+        set_timeout(-1, QUERY, query_timeout, 1);
         set_timeout(-1, REPLY, -1, 1);
     }
 
@@ -414,7 +418,8 @@ main(int argc, char **argv)
                     printf("AHCP data expired.\n");
                 unaccept_data(interfaces, dummy);
                 data_expires = data_origin = data_age_origin = 0;
-                set_timeout(-1, QUERY, 3000, 0);
+                query_timeout = INITIAL_QUERY_TIMEOUT;
+                set_timeout(-1, QUERY, query_timeout, 0);
             } else if(valid_for <= 50) {
                 /* Our data is going to expire soon */
                 if(debug_level >= 2)
@@ -496,8 +501,10 @@ main(int argc, char **argv)
                     set_timeout(i, QUERY, -1, 1);
                 else if(config_data)
                     set_timeout(i, QUERY, 600 * 1000, 1);
-                else
-                    set_timeout(i, QUERY, 15000, 1);
+                else {
+                    query_timeout = MIN(2 * query_timeout, MAX_QUERY_TIMEOUT);
+                    set_timeout(i, QUERY, query_timeout, 1);
+                }
             }
         }
     }
