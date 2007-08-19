@@ -193,12 +193,12 @@ start_babel() {
     port="${AHCP_BABEL_PORT_NUMBER:+-p $AHCP_BABEL_PORT_NUMBER}"
     hello="${AHCP_BABEL_HELLO_INTERVAL:+-h $AHCP_BABEL_HELLO_INTERVAL}"
 
-    if [ -r /usr/local/lib/ahcp/ahcp-options ] ; then
-        options="$(cat /usr/local/lib/ahcp/ahcp-options)"
+    if [ -r /usr/local/lib/ahcp/ahcp-babel-options ] ; then
+        options="$(cat /usr/local/lib/ahcp/ahcp-babel-options)"
     fi
 
-    if [ -r /usr/local/lib/ahcp/ahcp-interfaces ] ; then
-        more_interfaces="$(cat /usr/local/lib/ahcp/ahcp-interfaces)"
+    if [ -r /usr/local/lib/ahcp/ahcp-babel-interfaces ] ; then
+        more_interfaces="$(cat /usr/local/lib/ahcp/ahcp-babel-interfaces)"
     fi
 
     # Babel can work with unnumbered links, so only number the first one
