@@ -31,6 +31,9 @@ specify the default gateway that hosts will use.
 .BI \-n " name\-server"
 Specify the IPv6 address of the name server that nodes will use.
 .TP
+.BI \-N " ntp\-server"
+Specify the IPv6 address of the (S)NTP server that nodes will use.
+.TP
 .BI \-e " expire"
 Specify the time in seconds for which this configuration will be
 valid.  The default is 4 months.
