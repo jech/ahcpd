@@ -28,7 +28,7 @@ For the routing protocol
 .BR static ,
 specify the default gateway that hosts will use.
 .TP
-.BI \-N " name\-server"
+.BI \-n " name\-server"
 Specify the IPv6 address of the name server that nodes will use.
 .TP
 .BI \-e " expire"
