@@ -383,9 +383,9 @@ main(int argc, char **argv)
                            data we're receiving is going to expire soon */
                         if(valid(now.tv_sec, data_origin, data_expires,
                                  now.tv_sec - data_age_origin) >= 50) {
-                            if(now.tv_sec - data_age_origin < 120)
+                            if(now.tv_sec - data_age_origin < 180)
                                 continue;
-                            if(valid(now.tv_sec, origin, expires, age) < 50)
+                            if(valid(now.tv_sec, origin, expires, age) < 120)
                                 continue;
                         }
                     }
