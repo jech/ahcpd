@@ -15,8 +15,8 @@ If you have a spare native or 6to4 /64 prefix, use that.  If you
 don't, you can use the included utility `ahcp-generate-address'' to
 choose one randomly for you:
 
-  $ ahcp-generate-address -p -r
-  fde6:20f5:c9ac::
+  $ ahcp-generate-address -p -s -r
+  fde6:20f5:c9ac:358::
 
 This generates a random /48 prefix.  You may use any of the /64
 prefixes within.
@@ -27,7 +27,8 @@ prefixes within.
 An AHCP configuration is a blob of binary data and is generated with
 ahcp-generate.  For example
 
-  $ ahcp-generate -p fde6:20f5:c9ac:: -P babel -n fde6:20f5:c9ac::1 > ahcp.dat
+  $ ahcp-generate -p fde6:20f5:c9ac:358: -P babel -n fde6:20f5:c9ac:358:1 \
+        > ahcp.dat
 
 Please see the ahcp-generate(8) manual page for more information about
 the possible flags.
