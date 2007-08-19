@@ -39,10 +39,10 @@ main(int argc, char **argv)
     unsigned char address[16];
     char saddress[100];
     int i, rc, fd;
-    int random_prefix = 0, print_prefix = 0;
+    int random_prefix = 0, random_subnet = 0, print_prefix = 0;
 
     const char *usage =
-        "Usage: ahcp-generate-address [-p] {-r | prefix} [mac-48]\n";
+        "Usage: ahcp-generate-address [-p] [-s] {-r | prefix} [mac-48]\n";
 
     i = 1;
     while(i < argc) {
@@ -53,6 +53,9 @@ main(int argc, char **argv)
             break;
         } else if(strcmp(argv[i], "-p") == 0) {
             print_prefix = 1;
+            i++;
+        } else if(strcmp(argv[i], "-s") == 0) {
+            random_subnet = 1;
             i++;
         } else if(strcmp(argv[i], "-r") == 0) {
             random_prefix = 1;
@@ -79,7 +82,7 @@ main(int argc, char **argv)
     if(i < argc)
         goto usage;
 
-    if(!smac || random_prefix) {
+    if(!smac || random_prefix || random_subnet) {
         fd = open("/dev/urandom", O_RDONLY);
         if(fd < 0) {
             perror("open(random)");
@@ -101,6 +104,19 @@ main(int argc, char **argv)
         rc = inet_pton(AF_INET6, sprefix, address);
         if(rc != 1)
             goto usage;
+    }
+
+    if(random_subnet) {
+        if(address[6] != 0 || address[7] != 0) {
+            fprintf(stderr, "Cannot use -s with this prefix.\n");
+            exit(1);
+        } else {
+            rc = read(fd, address + 6, 2);
+            if(rc != 2) {
+                perror("read(random)");
+                exit(1);
+            }
+        }
     }
 
     if(print_prefix) {
