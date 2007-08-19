@@ -72,16 +72,16 @@ main(int argc, char **argv)
     } fourbytes;
     int i;
     char *usage =
-        "ahcp-generate -p prefix [-P protocol] [-g gw] [-N ns] [-e seconds] > ahcp.dat";
+        "ahcp-generate -p prefix [-P protocol] [-g gw] [-n ns] [-e seconds] > ahcp.dat";
     int rc;
 
     while(1) {
         int c;
-        c = getopt(argc, argv, "p:N:g:P:e:");
+        c = getopt(argc, argv, "p:n:g:P:e:");
         if(c < 0) break;
         switch(c) {
         case 'p': prefix = optarg; break;
-        case 'N': name_server = optarg; break;
+        case 'n': name_server = optarg; break;
         case 'g': default_gateway = optarg; break;
         case 'P':
             if(strcasecmp(optarg, "static") == 0)
