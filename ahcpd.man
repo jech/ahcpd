@@ -26,6 +26,14 @@ Run the daemon in authoritative mode, flooding data given in
 may be generated with
 .BR ahcp-generate (8).
 .TP
+.BI \-e " expires"
+Set the time in seconds after which non-authoritative data will expire
+from the network; the network can survive in the absence of any
+authoritative peers for roughly that amount of time.  The default is
+3600, and can safely be increased.  This flag has no effect if
+.B \-a
+has not been set.
+.TP
 .B \-n
 Participate in the flooding protocol, but don't actually perform any
 configuration.
