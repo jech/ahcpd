@@ -18,9 +18,6 @@ choose one randomly for you:
   $ ahcp-generate-address -p -s -r
   fde6:20f5:c9ac:358::
 
-This generates a random /48 prefix.  You may use any of the /64
-prefixes within.
-
 2. Generate an AHCP configuration
 ---------------------------------
 
