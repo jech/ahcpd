@@ -4,6 +4,17 @@ networks, where IPv6 autoconfiguration and DHCPv6 do not work, but may
 also be used on wired networks.
 
 
+Installation
+************
+
+  $ make
+  $ su -c 'make install'
+
+If compiling for OpenWRT, you will probably want to say something like
+
+  $ make CC=mipsel-linux-gcc PLATFORM_DEFINES='-march=mips32'
+
+
 Configuring a network to use AHCP
 *********************************
 
