@@ -40,20 +40,24 @@ is specified, in which case /48 is implied.
 .TP
 .I mac\-48
 Generate a host number from the given MAC\-48 address.  If omitted,
-the host number is drawn randomly (and the universal/global bit is set
-to zero).
+the host number is drawn randomly (and the local/global bit is set to
+zero).
 .SH EXAMPLES
-Generate a host number from a given prefix and MAC-48 address:
+Generate a host number from a given prefix and MAC\-48 address:
 .IP
-$ ahcp-generate-address 2001:DB8:1234:5678:: 01:23:45:67:89:ab
+$ ahcp\-generate\-address 2001:DB8:1234:5678:: 12:34:56:78:9a:bc
 .PP
 Generate a host number from a given prefix and a randomly chosen host number:
 .IP
-$ ahcp-generate-address 2001:DB8:1234:5678::
+$ ahcp\-generate\-address 2001:DB8:1234:5678::
 .PP
-Generate an RFC 4193 prefix:
+Generate a random /48 prefix according to RFC 4193:
 .IP
-$ ahcp-generate-address -p -r
+$ ahcp\-generate\-address \-p \-r
+.PP
+Generate a random /64 prefix according to RFC 4193:
+.IP
+$ ahcp-generate-address \-p \-r \-s
 .PP
 .SH SEE ALSO
 .BR ahcpd (8).
