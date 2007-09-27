@@ -1,0 +1,8 @@
+27 September 2007: ahcpd 0.2
+
+  * Fixed a bug in computation of validity time that would cause ahcpd
+    to be much more chatty than necessary.
+
+22 August 2007: ahcpd 0.1
+
+  * Initial public release.
