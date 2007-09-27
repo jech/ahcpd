@@ -95,7 +95,7 @@ valid(int nowsecs, int origin, int expires, int age)
         return expires - origin - age;
     if(nowsecs >= expires)
         return 0;
-    return MIN(expires - origin - age, nowsecs - expires);
+    return MIN(expires - origin - age, expires - nowsecs);
 }
 
 #define INITIAL_QUERY_TIMEOUT 2000
