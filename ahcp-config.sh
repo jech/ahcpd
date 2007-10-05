@@ -240,3 +240,6 @@ case $1 in
             *) die "Unknown routing protocol $AHCP_ROUTING_PROTOCOL";;
         esac;;
 esac
+if [ -x /usr/local/bin/ahcp-local.sh ]; then
+    /usr/local/bin/ahcp-local.sh $1
+fi
