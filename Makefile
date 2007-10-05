@@ -28,6 +28,7 @@ ahcp-generate-address.html: ahcp-generate-address.man
 
 install: all
 	-rm -f $(TARGET)$(PREFIX)/bin/ahcpd $(TARGET)$(PREFIX)/bin/ahcp-generate-address
+	mkdir -p $(TARGET)$(PREFIX)/bin/
 	cp ahcpd ahcp-generate ahcp-generate-address $(TARGET)$(PREFIX)/bin/
 	chmod +x $(TARGET)$(PREFIX)/bin/ahcpd
 	chmod +x $(TARGET)$(PREFIX)/bin/ahcp-generate
@@ -35,6 +36,7 @@ install: all
 	-rm -f $(TARGET)$(PREFIX)/bin/ahcp-config.sh
 	cp ahcp-config.sh $(TARGET)$(PREFIX)/bin/
 	chmod +x $(TARGET)$(PREFIX)/bin/ahcp-config.sh
+	mkdir -p $(TARGET)$(PREFIX)/man/man8/
 	cp -f ahcpd.man $(TARGET)$(PREFIX)/man/man8/ahcpd.8
 	cp -f ahcp-generate.man $(TARGET)$(PREFIX)/man/man8/ahcp-generate.8
 	cp -f ahcp-generate-address.man $(TARGET)$(PREFIX)/man/man8/ahcp-generate-address.8

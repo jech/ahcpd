@@ -131,7 +131,7 @@ parse_data(const unsigned char *data, int len, int start, char **interfaces)
     int i, opt, olen;
     int mandatory = 0;
     pid_t pid;
-    char *prefix = NULL, *nameserver = NULL;
+    char *prefix = NULL, *nameserver = NULL, *ntp_server = NULL;
     int routing_protocol = 0;
     char *routing_protocol_name = NULL;
     char *static_default_gw = NULL;
@@ -173,7 +173,8 @@ parse_data(const unsigned char *data, int len, int start, char **interfaces)
                 fprintf(stderr, "Received expired data.\n");
                 return -1;
             }
-        } else if(opt == OPT_IPv6_PREFIX || opt == OPT_NAME_SERVER) {
+        } else if(opt == OPT_IPv6_PREFIX || opt == OPT_NAME_SERVER ||
+                  opt == OPT_NTP_SERVER) {
             char *value;
             if(olen % 16 != 0) {
                 fprintf(stderr, "Unexpected length for %s.\n",
@@ -183,8 +184,12 @@ parse_data(const unsigned char *data, int len, int start, char **interfaces)
             value = parse_address_list(data + i + 2, olen);
             if(opt == OPT_IPv6_PREFIX)
                 prefix = value;
-            else
+            else if(opt == OPT_NAME_SERVER)
                 nameserver = value;
+            else if(opt == OPT_NTP_SERVER)
+                ntp_server = value;
+            else
+                abort();
         } else if(opt == OPT_ROUTING_PROTOCOL) {
             int omandatory = 0;
             int j;
@@ -354,6 +359,10 @@ parse_data(const unsigned char *data, int len, int start, char **interfaces)
             if(!nodns)
                 setenv("AHCP_NAMESERVER", nameserver, 1);
             free(nameserver);
+        }
+        if(ntp_server) {
+            setenv("AHCP_NTP_SERVER", ntp_server, 1);
+            free(ntp_server);
         }
         switch(start) {
         case 0: action = "stop"; break;
