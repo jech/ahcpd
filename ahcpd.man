@@ -49,6 +49,36 @@ Use the given configuration script instead of
 Set the debug level to
 .I level
 (default 1).
+.SH FILES
+.TP
+.B /etc/ahcp/ahcp\-local.sh
+Script that will be called after IP addresses and routing are
+configured or unconfigured.  It will be passed one argument, either
+.B start
+or
+.BR stop .
+.TP
+.B /etc/ahcp/ahcp\-olsrd.conf
+Additional configuration for the
+.B olsrd
+daemon.
+.TP
+.BI /etc/ahcp/ahcp\-olsrd\- hostname .conf
+Host-specific additional configuration for the
+.B olsrd
+daemon.
+.TP
+.B /etc/ahcp/ahcp\-babel\-options
+Additional command-line flags to pass to the
+.B babel
+daemon.
+.TP
+.B /etc/ahcp/ahcp\-babel\-interfaces
+List of interfaces that participate in the
+.I Babel
+protocol but not in the
+.I AHCP
+protocol.
 .SH SEE ALSO
 .BR dhcpcd (8),
 .BR dhclient (8),
