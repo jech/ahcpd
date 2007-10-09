@@ -87,7 +87,7 @@ using the ``-c'' flag:
 If you are using OLSR, you can request that ahcpd add sections to the
 olsrd configuration file by creating a file
 
-  /usr/local/lib/ahcp/ahcp-olsrd.conf
+  /etc/ahcp/ahcp-olsrd.conf
 
 For example, on an Internet gateway this file will typically contain
 
@@ -97,7 +97,7 @@ For example, on an Internet gateway this file will typically contain
 If you are using Babel, you can add random flags to the invocation of
 the babel daemon by creating a file
 
-  /usr/local/lib/ahcp/ahcp-babel-options
+  /etc/ahcp/ahcp-babel-options
 
 For example, on an Internet gateway this file will typically contain
 
@@ -106,7 +106,7 @@ For example, on an Internet gateway this file will typically contain
 You can also specify any interfaces that you want to participate in
 the Babel protocol but not the AHCP protocol by listing them in the file
 
-  /usr/local/lib/ahcp/ahcp-babel-interfaces
+  /etc/ahcp/ahcp-babel-interfaces
 
 
 Extending AHCP
