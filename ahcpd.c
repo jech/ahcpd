@@ -466,6 +466,7 @@ main(int argc, char **argv)
                 buf[3] = 0;
                 memcpy(buf + 4, &origin, 4);
                 memcpy(buf + 8, &expires, 4);
+                memset(buf + 12, 0, 4);
                 memcpy(buf + 16, &age, 2);
                 memcpy(buf + 18, &len, 2);
                 memcpy(buf + 20, config_data, data_len);
