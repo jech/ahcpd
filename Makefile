@@ -36,6 +36,9 @@ install: all
 	-rm -f $(TARGET)$(PREFIX)/bin/ahcp-config.sh
 	cp ahcp-config.sh $(TARGET)$(PREFIX)/bin/
 	chmod +x $(TARGET)$(PREFIX)/bin/ahcp-config.sh
+	-rm -f $(TARGET)$(PREFIX)/bin/ahcp-dummy-config.sh
+	cp ahcp-dummy-config.sh $(TARGET)$(PREFIX)/bin/
+	chmod +x $(TARGET)$(PREFIX)/bin/ahcp-dummy-config.sh
 	mkdir -p $(TARGET)$(PREFIX)/man/man8/
 	cp -f ahcpd.man $(TARGET)$(PREFIX)/man/man8/ahcpd.8
 	cp -f ahcp-generate.man $(TARGET)$(PREFIX)/man/man8/ahcp-generate.8
@@ -45,8 +48,10 @@ install: all
 
 uninstall:
 	-rm -f $(TARGET)$(PREFIX)/bin/ahcpd
+	-rm -f $(TARGET)$(PREFIX)/bin/ahcp-generate
 	-rm -f $(TARGET)$(PREFIX)/bin/ahcp-generate-address
 	-rm -f $(TARGET)$(PREFIX)/bin/ahcp-config.sh
+	-rm -f $(TARGET)$(PREFIX)/bin/ahcp-dummy-config.sh
 	-rm -f $(TARGET)$(PREFIX)/man/man8/ahcpd.8
 	-rm -f $(TARGET)$(PREFIX)/man/man8/ahcp-generate.8
 	-rm -f $(TARGET)$(PREFIX)/man/man8/ahcp-generate-address.8
