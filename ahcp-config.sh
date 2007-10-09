@@ -164,8 +164,8 @@ EOF
         echo "LinkQualityLevel $AHCP_OLSR_LINK_QUALITY" >> "$conf_filename"
     fi
 
-    for file in "/usr/local/lib/ahcp/ahcp-olsrd-$(uname -n).conf" \
-                "/usr/local/lib/ahcp/ahcp-olsrd.conf" ; do
+    for file in "/etc/ahcp/ahcp-olsrd-$(uname -n).conf" \
+                "/etc/ahcp/ahcp-olsrd.conf" ; do
         if [ -r "$file" ]; then
             sed "s/\$AHCP_OLSR_MULTICAST_ADDRESS/$multicast/" < "$file" \
                 >> "$conf_filename"
@@ -193,12 +193,12 @@ start_babel() {
     port="${AHCP_BABEL_PORT_NUMBER:+-p $AHCP_BABEL_PORT_NUMBER}"
     hello="${AHCP_BABEL_HELLO_INTERVAL:+-h $AHCP_BABEL_HELLO_INTERVAL}"
 
-    if [ -r /usr/local/lib/ahcp/ahcp-babel-options ] ; then
-        options="$(cat /usr/local/lib/ahcp/ahcp-babel-options)"
+    if [ -r /etc/ahcp/ahcp-babel-options ] ; then
+        options="$(cat /etc/ahcp/ahcp-babel-options)"
     fi
 
-    if [ -r /usr/local/lib/ahcp/ahcp-babel-interfaces ] ; then
-        more_interfaces="$(cat /usr/local/lib/ahcp/ahcp-babel-interfaces)"
+    if [ -r /etc/ahcp/ahcp-babel-interfaces ] ; then
+        more_interfaces="$(cat /etc/ahcp/ahcp-babel-interfaces)"
     fi
 
     # Babel can work with unnumbered links, so only number the first one
@@ -240,6 +240,7 @@ case $1 in
             *) die "Unknown routing protocol $AHCP_ROUTING_PROTOCOL";;
         esac;;
 esac
-if [ -x /usr/local/bin/ahcp-local.sh ]; then
-    /usr/local/bin/ahcp-local.sh $1
+
+if [ -x /etc/ahcp/ahcp-local.sh ]; then
+    /etc/ahcp/ahcp-local.sh $1
 fi
