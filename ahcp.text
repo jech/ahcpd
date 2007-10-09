@@ -205,6 +205,7 @@ An AHCP reply has the following structure:
   - common header: 4 bytes;
   - origin: 4 bytes;
   - expires: 4 bytes;
+  - reserved: 4 bytes;
   - age: 2 bytes;
   - body length: 2 bytes:
   - body: variable.
@@ -214,6 +215,9 @@ expressed as seconds since 1 January 1970 in network byte order.  Age
 is the age of this reply, expressed as relative seconds, in network
 byte order.  The body length is the length of the following body,
 expressed as a number of bytes in network byte order.
+
+The reserved field MUST be sent as zero, and MUST be ignored on
+reception.
 
 Any data following the body MUST be silently ignored.
 
