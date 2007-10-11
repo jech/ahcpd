@@ -214,6 +214,10 @@ main(int argc, char **argv)
 
     gettimeofday(&now, NULL);
 
+    if(time_broken(now.tv_sec))
+        fprintf(stderr,
+                "Warning: your clock is fubar (now = %d).\n", (int)now.tv_sec);
+
     fd = open("/dev/urandom", O_RDONLY);
     if(fd < 0) {
         perror("open(random)");
@@ -368,6 +372,25 @@ main(int argc, char **argv)
                 if(rc < len + 20) {
                     fprintf(stderr, "Truncated AHCP packet.\n");
                     continue;
+                }
+
+                if(origin > expires) {
+                    fprintf(stderr,
+                            "Received inconsistent AHCP packet "
+                            "(origin = %d, expires = %d, now = %d).\n",
+                            origin, expires, (int)now.tv_sec);
+                    continue;
+                }
+
+                if(!time_broken(now.tv_sec)) {
+                    if(origin > now.tv_sec + 300) {
+                        fprintf(stderr,
+                                "Received AHCP packet from the future "
+                                "(origin = %d, expires = %d, now = %d).\n"
+                                "Perhaps your clock is fubar?\n",
+                                origin, expires, (int)now.tv_sec);
+                        continue;
+                    }
                 }
 
                 if(!valid(now.tv_sec, origin, expires, age)) {
