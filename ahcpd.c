@@ -391,6 +391,14 @@ main(int argc, char **argv)
                                 origin, expires, (int)now.tv_sec);
                         continue;
                     }
+                    if(expires < now.tv_sec - 600) {
+                        fprintf(stderr,
+                                "Received expired AHCP packet "
+                                "(origin = %d, expires = %d, now = %d).\n"
+                                "Perhaps your clock is fubar?\n",
+                                origin, expires, (int)now.tv_sec);
+                        continue;
+                    }
                 }
 
                 if(!valid(now.tv_sec, origin, expires, age)) {
