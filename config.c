@@ -24,6 +24,7 @@ THE SOFTWARE.
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <errno.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <arpa/inet.h>
@@ -376,14 +377,17 @@ parse_data(const unsigned char *data, int len, int start, char **interfaces)
         exit(42);
     } else {
         int status;
+    again:
         pid = waitpid(pid, &status, 0);
-        if(pid < 0)
+        if(pid < 0) {
+            if(errno == EINTR)
+                goto again;
             perror("wait");
-        if(!WIFEXITED(status)) {
+            return -1;
+        } else if(!WIFEXITED(status)) {
             fprintf(stderr, "Child died violently (%d)\n", status);
             return -1;
-        }
-        if(WEXITSTATUS(status) != 0) {
+        } else if(WEXITSTATUS(status) != 0) {
             fprintf(stderr, "Child returned error status %d\n",
                     WEXITSTATUS(status));
             return -1;
