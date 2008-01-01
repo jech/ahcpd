@@ -1,11 +1,8 @@
 28 October 2007: ahcpd 0.3
 
   * Moved user-serviceable parts to /etc/ahcp/
-
   * Added support for configuring an NTP server.
-
   * Made ahcp print warnings when a clock inconsistency is detected.
-
   * Fixed error handling when the configuration script dies unexpectedly.
 
 27 September 2007: ahcpd 0.2
