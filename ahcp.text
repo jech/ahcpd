@@ -3,7 +3,7 @@
                           Juliusz Chroboczek
                          <jch@pps.jussieu.fr>
 
-                            9 October 2007
+                            19 August 2007
 
 
 Requirements notation
@@ -89,7 +89,7 @@ AHCP reply.  It sets the reply's header fields to the following
 values:
 
   - origin: the current UTC time, in seconds since 1 January 1970;
-  - expires: the current time plus at least twice AHCP_UNSOLICITED_REPLY;
+  - expires: the current time plus at least four times AHCP_UNSOLICITED_REPLY;
   - age: 0.
 
 An authoritative peer never sends AHCP queries.
@@ -146,11 +146,11 @@ reply, the peer passes it to the configuration sublayer for
 reconfiguration and replaces the stored values with the values
 obtained from the reply.
 
-A configured peer MAY optionally ignore replies that change the
-current configuration if the currently configured configuration is
-very fresh; this provides a small amount of hysteresis in the case
-when there are conflicting authoritative servers on the same network,
-at the cost of slower convergence after a change of configuration.
+A configured peer SHOULD ignore replies that change the current
+configuration if the current configuration is still valid for at least
+half its expiry time.  With moderate packet loss, this provides enough
+hysteresis to ensure that a peer will not switch between configurations
+if two distinct authoritative servers are configured on the same network.
 
 If no new valid replies are received for an extended period of time,
 it will eventually happen that the currently stored messages ceases
