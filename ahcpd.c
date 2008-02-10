@@ -419,14 +419,12 @@ main(int argc, char **argv)
                     if(config_data && data_changed(buf + 20, len)) {
                         /* In case someone puts two distinct authoritative
                            configurations on the same network, we want to have
-                           some hysteresis.  We avoid any different data if
-                           either our data was confirmed very recently, or the
-                           data we're receiving is going to expire soon */
+                           some hysteresis.  We ignore different data remains
+                           valid for at least half its validity interval. */
                         if(valid(now.tv_sec, data_origin, data_expires,
-                                 now.tv_sec - data_age_origin) >= 50) {
-                            if(now.tv_sec - data_age_origin < 180)
-                                continue;
-                            if(valid(now.tv_sec, origin, expires, age) < 120)
+                                 now.tv_sec - data_age_origin) >= 10) {
+                            if(valid(now.tv_sec, origin, expires, age) <
+                               (expires - origin) / 2)
                                 continue;
                         }
                     }
@@ -513,12 +511,9 @@ main(int argc, char **argv)
                                (struct sockaddr*)&sin6, sizeof(sin6));
                 if(rc < 0)
                     perror("ahcp_send");
-                if(authority)
-                    set_timeout(i, REPLY, MIN(expires_delay * 1000 / 4,
-                                              120 * 1000),
-                                1);
-                else
-                    set_timeout(i, REPLY, 300 * 1000, 1);
+                set_timeout(i, REPLY,
+                            MAX((data_expires - data_origin) * 125, 2000),
+                            1);
             }
 
             if(networks[i].query_time.tv_sec > 0 &&
