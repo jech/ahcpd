@@ -1,3 +1,7 @@
+ahcpd 0.4 (unreleased)
+
+  * Tweaked timing to avoid hopping between competing configurations.
+
 28 October 2007: ahcpd 0.3
 
   * Moved user-serviceable parts to /etc/ahcp/
