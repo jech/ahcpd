@@ -191,7 +191,7 @@ stop_olsr() {
 start_babel() {
     multicast="${AHCP_BABEL_MULTICAST_ADDRESS:+-m $AHCP_BABEL_MULTICAST_ADDRESS}"
     port="${AHCP_BABEL_PORT_NUMBER:+-p $AHCP_BABEL_PORT_NUMBER}"
-    hello="${AHCP_BABEL_HELLO_INTERVAL:+-h $AHCP_BABEL_HELLO_INTERVAL}"
+    hello="${AHCP_BABEL_HELLO_INTERVAL:+-h $(expr $AHCP_BABEL_HELLO_INTERVAL / 100)}"
 
     if [ -r /etc/ahcp/ahcp-babel-options ] ; then
         options="$(cat /etc/ahcp/ahcp-babel-options)"
