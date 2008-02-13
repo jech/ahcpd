@@ -38,6 +38,7 @@ THE SOFTWARE.
 
 #include "ahcpd.h"
 #include "config.h"
+#include "constants.h"
 
 #define QUERY 0
 #define REPLY 1
@@ -343,7 +344,7 @@ main(int argc, char **argv)
                 continue;
             }
 
-            if(buf[2] == 0) {
+            if(buf[2] == AHCP_QUERY) {
                 /* Query */
                 if(debug_level >= 2)
                     printf("Received AHCP query.\n");
@@ -351,7 +352,7 @@ main(int argc, char **argv)
                    this should be no more than 1.3s (due to jitter). */
                 if(config_data)
                     set_timeout(i, REPLY, 1000, 0);
-            } else if(buf[2] == 1) {
+            } else if(buf[2] == AHCP_REPLY) {
                 /* Reply */
                 unsigned int origin, expires;
                 unsigned short age, len;
@@ -491,7 +492,7 @@ main(int argc, char **argv)
                 len = htons(data_len);
                 buf[0] = 43;
                 buf[1] = 0;
-                buf[2] = 1;
+                buf[2] = AHCP_REPLY;
                 buf[3] = 0;
                 memcpy(buf + 4, &origin, 4);
                 memcpy(buf + 8, &expires, 4);
@@ -520,7 +521,7 @@ main(int argc, char **argv)
                timeval_compare(&networks[i].query_time, &now) <= 0) {
                 buf[0] = 43;
                 buf[1] = 0;
-                buf[2] = 0;
+                buf[2] = AHCP_QUERY;
                 buf[3] = 0;
 
                 memset(&sin6, 0, sizeof(sin6));
