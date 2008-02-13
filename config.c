@@ -400,10 +400,8 @@ static char *
 ntoa6(const unsigned char *data)
 {
     const char *p;
-    char buf1[17], buf2[100];
-    memcpy(buf1, data, 16);
-    buf1[16] = '\0';
-    p = inet_ntop(AF_INET6, buf1, buf2, 100);
+    char buf[100];
+    p = inet_ntop(AF_INET6, data, buf, 100);
     if(p == NULL) return NULL;
     return strdup(p);
 }
@@ -431,10 +429,13 @@ parse_address_list(const unsigned char *data, int len)
             char *old_result = result;
             result = realloc(old_result,
                              strlen(old_result) + 1 + strlen(value) + 1);
-            if(result == NULL) return NULL;
+            if(result == NULL) {
+                free(old_result);
+                return NULL;
+            }
             strcat(result, " ");
             strcat(result, value);
-            free(old_result);
+            free(value);
         }
         i += 16;
     }
