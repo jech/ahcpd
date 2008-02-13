@@ -662,7 +662,8 @@ BABEL_HELLO_INTERVAL
      +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 This option specifies the preferred hello interval for the Babel
-protocol.  It is normally not marked as mandatory, and may be overridden.
+protocol, expressed in hundredths of a second.  It is normally not
+marked as mandatory, and may be overridden.
 
 
 5. Security considerations
