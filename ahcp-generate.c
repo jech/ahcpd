@@ -74,7 +74,7 @@ main(int argc, char **argv)
     int i;
     char *usage =
         "ahcp-generate "
-        "-p prefix [-P protocol] [-g gw] [-n name-server] [N ntp-server]\n"
+        "-p prefix [-P protocol] [-g gw] [-n name-server] [-N ntp-server]\n"
         "              "
         "[-e seconds] > ahcp.dat";
     int rc;
