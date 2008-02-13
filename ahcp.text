@@ -3,7 +3,7 @@
                           Juliusz Chroboczek
                          <jch@pps.jussieu.fr>
 
-                           10 February 2008
+                           13 February 2008
 
 
 Requirements notation
@@ -179,30 +179,73 @@ If an AHCP message cannot fit in a network-layer packet, it is sent
 using the normal network-layer fragmentation mechanism of IPv6 (PMTU
 discovery is not used).  Every AHCP peer MUST be able to accept
 messages of at least 1452 octets (the IPv6 minimum maximum packet size
-minus 40 bytes of IPv6 header and 8 bytes of UDP header).  In order to
-avoid fragmentation, AHCP peers SHOULD NOT send messages that are
-larger than 1232 bytes (the IPv6 minimum maximum unfragmented packet
-size minus 40 bytes of IPv6 header and 8 bytes of UDP header).
+after reassembly minus 40 bytes of IPv6 header and 8 bytes of UDP
+header).  In order to avoid fragmentation, AHCP peers SHOULD NOT send
+messages that are larger than 1232 bytes (the IPv6 minimum maximum
+unfragmented packet size minus 40 bytes of IPv6 header and 8 bytes of
+UDP header).
 
-Every AHCP message starts with the following four bytes:
+Every AHCP message consists of a four-byte header followed with an
+opcode-dependent part:
 
-  - magic: 1 byte;
-  - version: 1 byte;
-  - opcode: 1 byte;
-  - reserved: 1 byte.
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |     Magic     |    Version    |    Opcode     |   Reserved    |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |   Opcode-dependent Part
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-
 
-Magic is the value 43, version is the value 0; both values MUST be
-checked on reception, and any packets with incorrect values in these
-fields must be ignored.  Opcode is 0 for a query, 1 for a reply.
-The reserved field MUST be sent as 0, and MUST be ignored on
-reception.
 
-An AHCP query only carries the common header; any data following the
-common header MUST be silently ignored.
+    Fields:
+
+      Magic     This octet has an arbitrary but carefully chosen value 43;
+                packets with a first octet different from 43 MUST be
+                silently ignored.
+
+      Version   This document specifies version 0 of the AHCP protocol.
+                Packets with a second octet different from 0 MUST be
+                silently ignored.
+
+      Opcode    0 for a query, 1 for a reply.  Messages with
+                a different opcode value MUST be silently ignored.
+
+      Reserved  This field MUST be sent as 0, and ignored upon reception.
+
+
+1.3.1 Query format
+
+In an AHCP query, the opcode-dependent part is empty; any data
+following the four-byte header MUST be ignored.
+
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |     Magic     |    Version    |  Opcode = 0   |   Reserved    |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+
+1.3.2 Reply format
 
 An AHCP reply has the following structure:
 
-  - common header: 4 bytes;
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |     Magic     |    Version    |  Opcode = 1   |   Reserved    |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                            Origin                             |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                            Expires                            |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                           Reserved                            |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |              Age              |          Body Length          |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |   Body ...
+     +-+-+-+-+-+-+-+-+-+-+-+-+-
+
+
   - origin: 4 bytes;
   - expires: 4 bytes;
   - reserved: 4 bytes;
@@ -210,11 +253,23 @@ An AHCP reply has the following structure:
   - body length: 2 bytes:
   - body: variable.
 
-Origin and expires are the origin and expiration times, respectively,
-expressed as seconds since 1 January 1970 in network byte order.  Age
-is the age of this reply, expressed as relative seconds, in network
-byte order.  The body length is the length of the following body,
-expressed as a number of bytes in network byte order.
+
+    Fields:
+
+      Origin    The origin time of this reply, expressed as a number
+                of seconds since 1 January 1970.
+
+      Expires   The expiry time of this reply, expressed as a number
+                of seconds since 1 January 1970.
+
+      Reserved  This field MUST be sent as 0, and ignored upon reception.
+
+      Age       The age of this reply, expressed as relative seconds.
+
+      Body Length
+                The length of the following body, expressed in bytes.
+
+Any data following the body MUST be silently ignored.
 
 The reserved field MUST be sent as zero, and MUST be ignored on
 reception.
@@ -285,14 +340,22 @@ The options PAD and MANDATORY are exactly one octet long.
 
 PAD:
 
-  code: 1 octet
+      0
+      0 1 2 3 4 5 6 7
+     +-+-+-+-+-+-+-+-+
+     |     Code      |
+     +-+-+-+-+-+-+-+-+
 
 The option PAD has no effect.  It may be used for padding.  Or not.
 
 
 MANDATORY:
 
-  code: 1 octet
+      0
+      0 1 2 3 4 5 6 7
+     +-+-+-+-+-+-+-+-+
+     |     Code      |
+     +-+-+-+-+-+-+-+-+
 
 The option MANDATORY indicates that the next option MUST be parsed and
 acted upon by the receiving peer.  If the peer does not recognise the
@@ -305,9 +368,13 @@ to the remaining options.
 EXPIRES: contains the time at which this block of data stops being
 suitable for configuration.
 
-    code: 1 octet
-    length: 1 octet
-    expires: 4 octets
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |     Code      |     Length    |           Expires             |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 This option allows a human administrator to ensure that a block of
 data is no longer used after a given date, even if rogue authoritative
@@ -318,19 +385,32 @@ marked as mandatory with the MANDATORY option.
 IPv6_PREFIX: one or more IPv6 prefixes to be used on the network.
 A prefix length of /64 is implied.
 
-    code: 1 octet
-    length: 1 octet
-    prefix: 16 octets
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |     Code      |     Length    |                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +
+     |                                                               |
+     +                                                               +
+     |                            Prefix                             |
+     +                                                               +
+     |                                                               |
+     +                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 This option is normally marked as mandatory with the MANDATORY option.
 
 
 ROUTING_PROTOCOL: specifies the routing protocol to use on the network
 
-    code: 1 octet
-    length: 1 octet
-    routing protocol: 1 octet
-    routing suboptions: variable
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |     Code      |     Length    |   Protocol    | Suboptions... |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     | ...
+     +-+-+-+-+-+-+-+-+
 
 This option is usually marked as mandatory; if absent, its value
 defaults to ROUTING_PROTOCOL_STATIC.  It is described in more detail
@@ -342,17 +422,56 @@ This option is normally marked as mandatory with the MANDATORY option.
 NAME_SERVER: specifies one or more DNS [RFC1035] name servers that may
 be available on this network.  The DNS servers are assumed to be equivalent.
 
-    code: 1 octet
-    length: 1 octet
-    name server addresses: 16 * n octets
-
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |     Code      |     Length    |                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +
+     |                                                               |
+     +                                                               +
+     |                        Name Server 1                          |
+     +                                                               +
+     |                                                               |
+     +                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                               |                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +
+     |                                                               |
+     +                                                               +
+     |                        Name Server 2                          |
+     +                                                               +
+     |                                                               |
+     +                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                               |                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +
+     |   ...
+     +-+-+-+-+-+-+-
 
 NTP_SERVER: specifies one or more (S)NTP servers [RFC4330] that may be
 available on this network.
 
-    code: 1 octet
-    length: 1 octet
-    NTP server addresses: 16 * n octets
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |     Code      |     Length    |                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +
+     |                                                               |
+     +                                                               +
+     |                        Name Server 1                          |
+     +                                                               +
+     |                                                               |
+     +                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                               |                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +
+     |                                                               |
+     +                                                               +
+     |                        Name Server 2                          |
+     +                                                               +
+     |                                                               |
+     +                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                               |                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +
+     |   ...
+     +-+-+-+-+-+-+-
 
 
 3.2 Defined routing algorithms and suboptions
@@ -389,9 +508,29 @@ the gateways.
 The suboption STATIC_DEFAULT_GATEWAY specifies the default gateways
 available.
 
-    code: 1 octet
-    length: 1 octet
-    gateway addresses: 16 * n octets
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |     Code      |     Length    |                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +
+     |                                                               |
+     +                                                               +
+     |                           Gateway 1                           |
+     +                                                               +
+     |                                                               |
+     +                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                               |                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +
+     |                                                               |
+     +                                                               +
+     |                           Gateway 2                           |
+     +                                                               +
+     |                                                               |
+     +                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                               |                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +
+     |   ...
+     +-+-+-+-+-+-+-
 
 The gateway to use should be chosen using the normal neighbour
 discovery procedures.  No provision is made for router preferences or
@@ -407,9 +546,19 @@ of suboptions are specified that specify the operation of OLSR.
 
 OLSR_MULTICAST_ADDRESS:
 
-    code: 1 octet
-    length: 1 octet
-    multicast address: 16 octets
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |     Code      |     Length    |                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +
+     |                                                               |
+     +                                                               +
+     |                    OLSR Multicast Address                     |
+     +                                                               +
+     |                                                               |
+     +                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 This option specifies the multicast address that carries OLSR traffic.
 It is marked as mandatory.
@@ -424,9 +573,11 @@ OLSR_HNA_VALIDITY
 OLSR_MIA_INTERVAL
 OLSR_MIA_VALIDITY
 
-    code: 1 octet
-    length: 1 octet
-    value: 2 octets
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |     Code      |     Length    |             Value             |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 These options specify the OLSR protocol parameters, in units of one
 100th of a second.  If not specified, they default to the values
@@ -437,9 +588,11 @@ These options are optional: they MAY be overridden by local configuration.
 
 OLSR_LINK_QUALITY:
 
-    code: 1 octet
-    length: 1 octet
-    link quality: 1 octet
+      0                   1                   2
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |     Code      |     Length    |     Value     |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 The value of this option, which must be 1 or 2, specifies whether to
 use the link quality algorithm implemented by the olsr.org daemon.  If
@@ -452,9 +605,11 @@ this option.  This option MUST NOT be overridden by local configuration.
 
 OLSR_FISH_EYE:
 
-    code: 1 octet
-    length: 1 octet
-    fish eye: 1 octet
+      0                   1                   2
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |     Code      |     Length    |     Value     |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 This option, the value of which must be 1, specifies whether to use
 the experimental Fish Eye algorithm, as implemented by the olsr.org
@@ -470,27 +625,41 @@ nodes on the network participate in the Babel routing protocol
 
 BABEL_MULTICAST_ADDRESS
 
-    code: 1 octet
-    length: 1 octet
-    multicast address: 16 octets
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |     Code      |     Length    |                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+                               +
+     |                                                               |
+     +                                                               +
+     |                   Babel Multicast Address                     |
+     +                                                               +
+     |                                                               |
+     +                               +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |                               |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
-This option specifies the multicast address that carries OLSR traffic.
+This option specifies the multicast address that carries Babel traffic.
 It is marked as mandatory.
 
 BABEL_PORT_NUMBER
 
-    code: 1 octet
-    length: 1 octet
-    port number: 2 octets
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |     Code      |     Length    |          Port Number          |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 This option specifies the UDP port on which Babel operates.  It is
 marked as mandatory.
 
 BABEL_HELLO_INTERVAL
 
-    code: 1 octet
-    length: 1 octet
-    hello interval: 2 octets
+      0                   1                   2                   3
+      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+     |     Code      |     Length    |        Hello Interval         |
+     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 
 This option specifies the preferred hello interval for the Babel
 protocol.  It is normally not marked as mandatory, and may be overridden.
