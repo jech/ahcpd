@@ -246,14 +246,6 @@ An AHCP reply has the following structure:
      +-+-+-+-+-+-+-+-+-+-+-+-+-
 
 
-  - origin: 4 bytes;
-  - expires: 4 bytes;
-  - reserved: 4 bytes;
-  - age: 2 bytes;
-  - body length: 2 bytes:
-  - body: variable.
-
-
     Fields:
 
       Origin    The origin time of this reply, expressed as a number
