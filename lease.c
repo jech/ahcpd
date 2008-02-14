@@ -221,6 +221,7 @@ create_lease_file(char *fn)
     rc = link(buft, buf);
     if(rc < 0) {
         int save = errno;
+        close(fd);
         unlink(buft);
         errno = save;
         return -1;
@@ -230,6 +231,7 @@ create_lease_file(char *fn)
     rc = link(buf, fn);
     if(rc < 0) {
         int save = errno;
+        close(fd);
         unlink(buf);
         errno = save;
         return -1;
@@ -248,8 +250,10 @@ close_lease_file(char *fn, int fd)
         return -1;
 
     rc = fsync(fd);
-    if(fd < 0)
-        return -1;
+    if(rc < 0) {
+        perror("fsync(lease_file");
+        /* But continue */
+    }
 
     strncpy(buf, fn, 300);
     strncat(buf, ".lock", 300);
@@ -470,8 +474,8 @@ lease_init(const char *dir, unsigned int first, unsigned int last)
         strncat(buf, "/", 255);
         strncat(buf, e->d_name, 255);
         buf[255] = '\0';
-        /* No need to take a lock -- if there's a race condition,
-           we'll just get a wrong hint. */
+        /* No need to take a lock -- if there's a race condition, we'll just
+           get a wrong hint.  And we take a lock below before purging. */
         fd = open(buf, O_RDONLY);
         if(fd < 0) {
             fprintf(stderr, "Inaccessible lease file %s.\n", e->d_name);
@@ -485,11 +489,11 @@ lease_init(const char *dir, unsigned int first, unsigned int last)
         }
 
         if(lease_end + LEASE_PURGE_TIME < now.tv_sec) {
-            /* Take a lock */
+            /* Take lock */
             fd = open_lease_file(buf);
             if(fd < 0)
                 continue;
-            rc = read_lease_file(fd, NULL, &lease_end, NULL, client_buf, 700);
+            rc = read_lease_file(fd, NULL, &lease_end, NULL, NULL, 0);
             if(rc >= 0) {
                 /* Check for race */
                 if(lease_end + LEASE_PURGE_TIME < now.tv_sec)
