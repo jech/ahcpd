@@ -29,6 +29,7 @@ THE SOFTWARE.
 #include <time.h>
 #include <errno.h>
 #include <sys/types.h>
+#include <dirent.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
@@ -63,8 +64,92 @@ release_lease(const unsigned char *ipv4,
 #define MAX_LEASE_TIME 3600
 #define LEASE_GRACE_TIME 600
 
+#define MAX_LEASE_HINTS 256
+
 static unsigned int first_address = 0, last_address = 0;
 const char *lease_directory = NULL;
+
+/* A table mapping known ids to IPs.  It's only used as a hint: if it
+   gets corrupted, clients might not get the same IP as last time, but
+   everything will still be safe. */
+
+struct lease_hint {
+    unsigned char *id;
+    int id_len;
+    unsigned int address;
+};
+
+static struct lease_hint *hints = NULL;
+
+static int numhints = 0;
+static int maxhints = 0;
+
+static int
+hint_match(struct lease_hint *hint, const unsigned char *id, int id_len)
+{
+    if(hint->id == NULL)
+        return 0;
+
+    return (hint->id_len == id_len && memcmp(hint->id, id, id_len) == 0);
+}
+
+static unsigned int
+find_hint(const unsigned char *id, int id_len)
+{
+    int i;
+    for(i = 0; i < numhints; i++) {
+        if(hint_match(&hints[i], id, id_len))
+            return hints[i].address;
+    }
+    return 0;
+}
+
+static void
+add_hint(const unsigned char *id, int id_len, unsigned int address)
+{
+    struct lease_hint *hint;
+    int i;
+
+    for(i = 0; i < numhints; i++) {
+        if(hint_match(&hints[i], id, id_len)) {
+            hints[i].address = address;
+            return;
+        }
+    }
+
+    hint = NULL;
+
+    for(i = 0; i < numhints; i++) {
+        if(hints[i].id == NULL) {
+            hint = &hints[i];
+            break;
+        }
+    }
+
+    if(hint == NULL) {
+        if(numhints < maxhints)
+            hint = &hints[numhints++];
+    }
+
+    if(hint == NULL) {
+        if(maxhints == 0)
+            return;
+
+        /* Flush a random hint. */
+        i = random() % maxhints;
+        free(hints[i].id);
+        hints[i].id = NULL;
+        hints[i].id_len = 0;
+        hints[i].address = 0;
+        hint = &hints[i];
+    }
+
+    hint->id = malloc(id_len);
+    if(hint->id == NULL)
+        return;
+    hint->address = address;
+    return;
+}
 
 static char *
 lease_file(const unsigned char *ipv4)
@@ -177,7 +262,7 @@ close_lease_file(char *fn, int fd)
 
 static int
 read_lease_file(int fd, const unsigned char *ipv4,
-                int *lease_end_return,
+                int *lease_end_return, unsigned char *ipv4_return,
                 unsigned char *client_buf, int len)
 {
     int rc;
@@ -200,7 +285,7 @@ read_lease_file(int fd, const unsigned char *ipv4,
         return -1;
     }
 
-    if(memcmp(ipv4, buf + 8, 4) != 0) {
+    if(ipv4 && memcmp(ipv4, buf + 8, 4) != 0) {
         fprintf(stderr, "Mismatched lease file.\n");
         return -1;
     }
@@ -215,6 +300,8 @@ read_lease_file(int fd, const unsigned char *ipv4,
     }
     if(lease_end_return)
         *lease_end_return = lease_end;
+    if(ipv4_return)
+        memcpy(ipv4_return, buf + 8, 4);
     return rc - 16;
 }
 
@@ -293,7 +380,7 @@ get_lease(const unsigned char *ipv4, unsigned short lease_time,
         return -1;
     }
 
-    rc = read_lease_file(fd, ipv4, &old_lease_end, buf, 700);
+    rc = read_lease_file(fd, ipv4, &old_lease_end, NULL, buf, 700);
     if(rc < 0) {
         fprintf(stderr, "Couldn't read lease file.\n");
         goto fail;
@@ -347,9 +434,59 @@ get_lease(const unsigned char *ipv4, unsigned short lease_time,
 int
 lease_init(const char *dir, unsigned int first, unsigned int last)
 {
+    DIR *d;
+    char buf[256];
+
+    hints = calloc(MAX_LEASE_HINTS, sizeof(struct lease_hint));
+    if(hints == NULL)
+        return -1;
+    numhints = 0;
+    maxhints = MAX_LEASE_HINTS;
+
+    d = opendir(dir);
+    if(d == NULL) {
+        perror("open(lease_dir)");
+        return -1;
+    }
+
+    while(1) {
+        struct dirent *e;
+        unsigned char ipv4[4], client_buf[700];
+        unsigned int a;
+        int fd, rc;
+
+        e = readdir(d);
+        if(e == NULL) break;
+        if(e->d_name[0] == '.')
+            continue;
+        strncpy(buf, dir, 255);
+        strncat(buf, "/", 255);
+        strncat(buf, e->d_name, 255);
+        buf[255] = '\0';
+        /* No need to take a lock -- if there's a race condition,
+           we'll just get a wrong hint. */
+        fd = open(buf, O_RDONLY);
+        if(fd < 0) {
+            fprintf(stderr, "Inaccessible lease file %s.\n", e->d_name);
+            continue;
+        }
+        rc = read_lease_file(fd, NULL, NULL, ipv4, client_buf, 700);
+        close(fd);
+        if(rc < 0) {
+            fprintf(stderr, "Corrupted lease file %s.\n", e->d_name);
+            continue;
+        }
+
+        memcpy(&a, ipv4, 4);
+        a = ntohl(a);
+
+        add_hint(client_buf, rc, a);
+    }
+
     lease_directory = dir;
     first_address = first;
     last_address = last;
+
     return 1;
 }
 
@@ -375,7 +512,7 @@ release_lease(const unsigned char *ipv4,
         return -1;
     }
 
-    rc = read_lease_file(fd, ipv4, NULL, buf, 700);
+    rc = read_lease_file(fd, ipv4, NULL, NULL, buf, 700);
     if(rc < 0) {
         fprintf(stderr, "Couldn't read lease file.\n");
         goto fail;
@@ -424,13 +561,15 @@ take_lease(const unsigned char *client_id, int client_id_len,
     if(time > MAX_LEASE_TIME)
         time = MAX_LEASE_TIME;
 
-    a0 = first_address;
     if(suggested_ipv4) {
         memcpy(&a0, suggested_ipv4, 4);
         a0 = ntohl(a0);
-        if(a0 < first_address || a0 > last_address)
-            a0 = first_address;
+    } else {
+        a0 = find_hint(client_id, client_id_len);
     }
+
+    if(a0 < first_address || a0 > last_address)
+        a0 = first_address;
 
     a = a0;
 
@@ -442,6 +581,7 @@ take_lease(const unsigned char *client_id, int client_id_len,
         memcpy(ipv4, &an, 4);
         rc = get_lease(ipv4, time, client_id, client_id_len);
         if(rc >= 0) {
+            add_hint(client_id, client_id_len, a);
             memcpy(ipv4_return, ipv4, 4);
             *lease_time = time;
             return 1;
