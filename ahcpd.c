@@ -603,6 +603,9 @@ main(int argc, char **argv)
                                     MIN(lease_time * 2000 / 3, 60 * 60 * 1000),
                                     1);
                         stateful_request_timeout = 2000;
+                    } else {
+                        set_timeout(-1, STATEFUL_REQUEST, 60 * 1000, 1);
+                        stateful_request_timeout = MAX_STATEFUL_REQUEST_TIMEOUT;
                     }
                 } else {
                     set_timeout(-1, STATEFUL_REQUEST, 60 * 1000, 1);
