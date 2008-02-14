@@ -127,6 +127,8 @@ main(int argc, char **argv)
     int expires_delay = 3600;
     int query_timeout = INITIAL_QUERY_TIMEOUT;
     int stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
+    char *lease_dir = NULL;
+    unsigned int lease_first, lease_last;
 
     i = 1;
     while(i < argc && argv[i][0] == '-') {
@@ -184,28 +186,25 @@ main(int argc, char **argv)
 #ifndef NO_STATEFUL_SERVER
         } else if(strcmp(argv[i], "-S") == 0) {
             unsigned char ipv4[4];
-            char *dir;
-            unsigned int first, last;
             int rc;
-            i++;
-            if(i >= argc) goto usage;
-            rc = inet_pton(AF_INET, argv[i], ipv4);
-            if(rc <= 0) goto usage;
-            memcpy(&first, ipv4, 4);
-            first = ntohl(first);
-            i++;
-            if(i >= argc) goto usage;
-            rc = inet_pton(AF_INET, argv[i], ipv4);
-            if(rc <= 0) goto usage;
-            memcpy(&last, ipv4, 4);
-            last = ntohl(last);
-            i++;
-            if(i >= argc) goto usage;
-            dir = argv[i];
-            i++;
-            rc = lease_init(dir, first, last);
-            if(rc < 0)
+            if(lease_dir)
                 goto usage;
+            i++;
+            if(i >= argc) goto usage;
+            rc = inet_pton(AF_INET, argv[i], ipv4);
+            if(rc <= 0) goto usage;
+            memcpy(&lease_first, ipv4, 4);
+            lease_first = ntohl(lease_first);
+            i++;
+            if(i >= argc) goto usage;
+            rc = inet_pton(AF_INET, argv[i], ipv4);
+            if(rc <= 0) goto usage;
+            memcpy(&lease_last, ipv4, 4);
+            lease_last = ntohl(lease_last);
+            i++;
+            if(i >= argc) goto usage;
+            lease_dir = argv[i];
+            i++;
 #endif
         } else {
             goto usage;
@@ -312,6 +311,18 @@ main(int argc, char **argv)
         }
     }
  unique_id_done:
+
+    if(lease_dir) {
+        if(time_broken(now.tv_sec)) {
+            fprintf(stderr, "Cannot run stateful server with broken clock.\n");
+            exit(1);
+        }
+        rc = lease_init(lease_dir, lease_first, lease_last);
+        if(rc < 0) {
+            fprintf(stderr, "Couldn't initialise lease database.\n");
+            exit(1);
+        }
+    }
 
     s = ahcp_socket(port);
     if(s < 0) {
