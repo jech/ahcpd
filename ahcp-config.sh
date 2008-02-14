@@ -18,7 +18,7 @@ babel_pidfile=/var/run/ahcp_babel_pid
 usage="Usage: $0 (start|stop)"
 debuglevel=${AHCP_DEBUG_LEVEL:-1}
 if (echo "$AHCP_PREFIX" | grep -q ' ') ; then
-    echo "Warning: multiple prefixes not supported yet."
+    echo "Warning: multiple prefixes not supported yet." >&2
     prefix="$(echo $AHCP_PREFIX | sed 's/ .*//')"
 else
     prefix="${AHCP_PREFIX:--s -r}"
@@ -57,6 +57,10 @@ then
 	ifconfig "$1" inet6 "${2:-$(if_address $1)}$3" delete
     }
 
+    add_ipv4_addresses() { echo "IPv4 not implemented under Darwin" >&2 }
+
+    del_ipv4_addresses() { :; }
+
 else
 
     findcmd ip iproute
@@ -78,6 +82,17 @@ else
 	ip -6 addr del "${2:-$(if_address $1)}$3" dev "$1"
     }
     
+    add_ipv4_addresses() {
+        for i in $interfaces; do
+            ip addr add $ipv4_address/32 dev $i
+        done
+    }
+
+    del_ipv4_addresses() {
+        for i in $interfaces; do
+            ip addr del $ipv4_address/32 dev $i
+        done
+    }
 fi
     
 add_addresses() {
@@ -89,18 +104,6 @@ add_addresses() {
 del_addresses() {
     for i in $interfaces; do
         del_address $i
-    done
-}
-
-add_ipv4_addresses() {
-    for i in $interfaces; do
-        ip addr add $ipv4_address/32 dev $i
-    done
-}
-
-del_ipv4_addresses() {
-    for i in $interfaces; do
-        ip addr del $ipv4_address/32 dev $i
     done
 }
 
