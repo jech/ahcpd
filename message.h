@@ -27,3 +27,7 @@ int parse_reply(unsigned char *buf, int len,
                 unsigned int *origin_r, unsigned int *expires_r,
                 unsigned short *age_r,
                 unsigned char **data_r, unsigned short *dlen_r);
+int parse_stateful_request(unsigned char *buf, int len,
+                           unsigned short *lease_time_r,
+                           unsigned char **uid_r, unsigned short *ulen_r,
+                           unsigned char **data_r, unsigned short *dlen_r);

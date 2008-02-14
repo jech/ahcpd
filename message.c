@@ -20,6 +20,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
+#include <string.h>
+#include <arpa/inet.h>
+
+#include "message.h"
+
 int
 validate_packet(unsigned char *buf, int len)
 {
@@ -65,5 +70,42 @@ parse_reply(unsigned char *buf, int len,
     *data_r = buf + 20;
     *dlen_r = dlen;
 
+    return 1;
+}
+
+int
+parse_stateful_request(unsigned char *buf, int len,
+                       unsigned short *lease_time_r,
+                       unsigned char **uid_r, unsigned short *ulen_r,
+                       unsigned char **data_r, unsigned short *dlen_r)
+{
+    unsigned short lease_time, ulen, dlen;
+
+    if(len < 8)
+        return -1;
+
+    memcpy(&lease_time, buf + 4, 2);
+    lease_time = ntohs(lease_time);
+
+    memcpy(&ulen, buf + 6, 2);
+    ulen = ntohs(ulen);
+
+    if(ulen > 500)
+        return -1;
+
+    if(len < 8 + ulen + 2)
+        return -1;
+
+    memcpy(&dlen, buf + 8 + ulen, 2);
+    dlen = ntohs(len);
+
+    if(len < 8 + ulen + 2 + dlen)
+        return -1;
+
+    *lease_time_r = lease_time;
+    *uid_r = buf + 8;
+    *ulen_r = ulen;
+    *data_r = buf + 8 + ulen + 2 + dlen;
+    *dlen_r = dlen;
     return 1;
 }

@@ -459,10 +459,7 @@ main(int argc, char **argv)
                     fprintf(stderr, "Received non-local reply.\n");
                     continue;
                 }
-                if(rc < 16) {
-                    fprintf(stderr, "Truncated AHCP packet.\n");
-                    continue;
-                }
+
                 if(debug_level >= 2)
                     printf("Received AHCP reply on %s.\n",
                            networks[net].ifname);
@@ -552,8 +549,8 @@ main(int argc, char **argv)
                 }
             } else if(buf[2] == AHCP_STATEFUL_REQUEST ||
                       buf[2] == AHCP_STATEFUL_RELEASE) {
-                unsigned short lease_time;
-                unsigned short uid_len, len;
+                unsigned short lease_time, ulen, dlen;
+                unsigned char *uid, *data;
                 unsigned char suggested_ipv4[4] = {0, 0, 0, 0};
                 unsigned char ipv4[4];
 
@@ -565,25 +562,22 @@ main(int argc, char **argv)
                 if(time_broken(now.tv_sec))
                     continue;
 
-                if(rc < 8)
+                rc = parse_stateful_request(buf, rc,
+                                            &lease_time, &uid, &ulen,
+                                            &data, &dlen);
+                if(rc < 0) {
+                    fprintf(stderr, "Corrupted stateful request.\n");
                     continue;
+                }
 
-                memcpy(&lease_time, buf + 4, 2);
-                lease_time = ntohs(lease_time);
-                memcpy(&uid_len, buf + 6, 2);
-                uid_len = ntohs(uid_len);
-                if(rc < 8 + uid_len + 2)
+                rc = parse_stateful_data(data, dlen, suggested_ipv4);
+                if(rc < 0) {
+                    fprintf(stderr, "Unacceptable stateful request.\n");
                     continue;
-                if(uid_len > 500)
-                    continue;
-                memcpy(&len, buf + 8 + uid_len, 2);
-                len = ntohs(len);
-                if(rc < 8 + uid_len + 2 + len)
-                    continue;
-                parse_stateful_data(buf + 8 + uid_len + 2, len,
-                                    suggested_ipv4);
+                }
+
                 if(buf[2] == AHCP_STATEFUL_REQUEST) {
-                    rc = take_lease(buf + 8, uid_len,
+                    rc = take_lease(uid, ulen,
                                     suggested_ipv4[0] == 0 ?
                                     NULL : suggested_ipv4,
                                     ipv4, &lease_time);
@@ -597,7 +591,7 @@ main(int argc, char **argv)
                         buf[3] = 0;
                         buf[4] = 0;
                         buf[5] = 0;
-                        ahcp_send(s, buf, 8 + uid_len,
+                        ahcp_send(s, buf, 8 + ulen,
                                   (struct sockaddr*)&sin6, sizeof(sin6));
                     } else {
                         int i;
@@ -607,7 +601,7 @@ main(int argc, char **argv)
                         buf[2] = AHCP_STATEFUL_ACK;
                         buf[3] = 0;
                         memcpy(buf + 4, &lease_time, 2);
-                        i = 8 + uid_len;
+                        i = 8 + ulen;
                         i += build_stateful_data(buf + i, ipv4);
                         ahcp_send(s, buf, i,
                                   (struct sockaddr*)&sin6, sizeof(sin6));
@@ -616,7 +610,7 @@ main(int argc, char **argv)
                     /* Release */
                     release_lease(suggested_ipv4[0] == 0 ?
                                   NULL : suggested_ipv4,
-                                  buf + 8, uid_len);
+                                  uid, ulen);
                 }
             } else if(buf[2] == AHCP_STATEFUL_ACK ||
                       buf[2] == AHCP_STATEFUL_NAK) {
