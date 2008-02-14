@@ -520,6 +520,9 @@ main(int argc, char **argv)
                 unsigned char suggested_ipv4[4] = {0, 0, 0, 0};
                 unsigned char ipv4[4];
 
+                if(time_broken(now.tv_sec))
+                    continue;
+
                 if(rc < 8)
                     continue;
 
