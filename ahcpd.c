@@ -37,16 +37,15 @@ THE SOFTWARE.
 #include <net/if.h>
 
 #include "ahcpd.h"
-#include "config.h"
 #include "constants.h"
+#include "message.h"
+#include "config.h"
 #include "lease.h"
 
 #define QUERY 0
 #define REPLY 1
 #define STATEFUL_REQUEST 2
 #define STATEFUL_EXPIRE 3
-
-#define BUFFER_SIZE 1500
 
 struct timeval now;
 const struct timeval zero = {0, 0};
@@ -432,19 +431,10 @@ main(int argc, char **argv)
                 i = -1;
             }
 
-            if(rc < 4) {
-                fprintf(stderr, "Truncated packet.\n");
-                continue;
-            }
-
-            if(buf[0] != 43) {
-                fprintf(stderr, "Incorrect magic.\n");
-                continue;
-            }
-
-            if(buf[1] != 0) {
-                fprintf(stderr, "Incorrect version.\n");
-                continue;
+            if(!validate_packet(buf, rc)) {
+                fprintf(stderr,
+                        "Received corrupted packet on %s.\n",
+                        networks[i].ifname);
             }
 
             if(buf[2] == AHCP_QUERY) {
@@ -464,28 +454,25 @@ main(int argc, char **argv)
                     set_timeout(i, REPLY, 1000, 0);
             } else if(buf[2] == AHCP_REPLY) {
                 /* Reply */
+                unsigned int origin, expires;
+                unsigned short age, dlen;
+                unsigned char *data;
+
                 if(i < 0) {
                     fprintf(stderr, "Received non-local reply.\n");
                     continue;
                 }
-                unsigned int origin, expires;
-                unsigned short age, len;
                 if(rc < 16) {
                     fprintf(stderr, "Truncated AHCP packet.\n");
                     continue;
                 }
                 if(debug_level >= 2)
                     printf("Received AHCP reply.\n");
-                memcpy(&origin, buf + 4, 4);
-                origin = ntohl(origin);
-                memcpy(&expires, buf + 8, 4);
-                expires = ntohl(expires);
-                memcpy(&age, buf + 16, 2);
-                age = ntohs(age);
-                memcpy(&len, buf + 18, 2);
-                len = ntohs(len);
-                if(rc < len + 20) {
-                    fprintf(stderr, "Truncated AHCP packet.\n");
+
+                rc = parse_reply(buf, rc,
+                                 &origin, &expires, &age, &data, &dlen);
+                if(rc < 0) {
+                    fprintf(stderr, "Couldn't parse reply.\n");
                     continue;
                 }
 
@@ -502,7 +489,7 @@ main(int argc, char **argv)
                         fprintf(stderr,
                                 "Received AHCP packet from the future "
                                 "(origin = %d, expires = %d, now = %d).\n"
-                                "Perhaps your clock is fubar?\n",
+                                "Perhaps somebody's clock is fubar?\n",
                                 origin, expires, (int)now.tv_sec);
                         continue;
                     }
@@ -510,7 +497,7 @@ main(int argc, char **argv)
                         fprintf(stderr,
                                 "Received expired AHCP packet "
                                 "(origin = %d, expires = %d, now = %d).\n"
-                                "Perhaps your clock is fubar?\n",
+                                "Perhaps somebody's clock is fubar?\n",
                                 origin, expires, (int)now.tv_sec);
                         continue;
                     }
@@ -531,7 +518,7 @@ main(int argc, char **argv)
                 if(valid(now.tv_sec, origin, expires, age) &&
                    (!config_data || origin > data_origin)) {
                     /* More fresh than what we've got */
-                    if(config_data && data_changed(buf + 20, len)) {
+                    if(config_data && data_changed(data, dlen)) {
                         /* In case someone puts two distinct authoritative
                            configurations on the same network, we want to have
                            some hysteresis.  We ignore different data for
@@ -543,7 +530,7 @@ main(int argc, char **argv)
                                 continue;
                         }
                     }
-                    rc = accept_data(buf + 20, len, interfaces, dummy);
+                    rc = accept_data(data, dlen, interfaces, dummy);
                     if(rc >= 0) {
                         data_origin = origin;
                         data_expires = expires;

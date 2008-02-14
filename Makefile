@@ -8,8 +8,9 @@ CFLAGS = $(CDEBUGFLAGS) $(DEFINES) $(EXTRA_DEFINES)
 
 all: ahcpd ahcp-generate-address ahcp-generate
 
-ahcpd: ahcpd.o config.o lease.o
-	$(CC) $(CFLAGS) $(LDFLAGS) -o ahcpd ahcpd.o config.o lease.o $(LDLIBS)
+ahcpd: ahcpd.o message.o config.o lease.o
+	$(CC) $(CFLAGS) $(LDFLAGS) -o ahcpd \
+              ahcpd.o message.o config.o lease.o $(LDLIBS)
 
 ahcp-generate: ahcp-generate.o
 	$(CC) $(CFLAGS) $(LDFLAGS) -o ahcp-generate ahcp-generate.o $(LDLIBS)
