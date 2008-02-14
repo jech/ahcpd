@@ -607,6 +607,9 @@ main(int argc, char **argv)
                     ahcp_send(s, buf, i,
                               (struct sockaddr*)&sin6, sizeof(sin6));
                 }
+            } else if(buf[2] == AHCP_STATEFUL_RELEASE) {
+                if(debug_level >= 2)
+                    printf("Received satateful release.\n");
             } else if(buf[2] == AHCP_STATEFUL_ACK ||
                       buf[2] == AHCP_STATEFUL_NAK) {
                 unsigned short sixteen = htons(16);
