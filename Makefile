@@ -2,6 +2,8 @@ PREFIX = /usr/local
 
 CDEBUGFLAGS = -Os -g -Wall
 
+DEFINES = $(PLATFORM_DEFINES)
+
 CFLAGS = $(CDEBUGFLAGS) $(DEFINES) $(EXTRA_DEFINES)
 
 all: ahcpd ahcp-generate-address ahcp-generate
