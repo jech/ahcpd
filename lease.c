@@ -485,6 +485,7 @@ lease_init(const char *dir, unsigned int first, unsigned int last)
 
         add_hint(client_buf, rc, a);
     }
+    closedir(d);
 
     lease_directory = dir;
     first_address = first;
