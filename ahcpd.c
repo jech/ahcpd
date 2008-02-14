@@ -52,7 +52,7 @@ struct timeval now;
 const struct timeval zero = {0, 0};
 
 static volatile sig_atomic_t exiting = 0;
-unsigned char unique_id[16];
+unsigned char client_id[16];
 unsigned char buf[BUFFER_SIZE];
 unsigned int data_origin = 0, data_expires = 0, data_age_origin = 0;
 int nodns = 0, nostate = 0;
@@ -262,7 +262,7 @@ main(int argc, char **argv)
         perror("open(random)");
         seed = now.tv_sec ^ now.tv_usec;
     } else {
-        rc = read(fd, unique_id, 16);
+        rc = read(fd, client_id, 16);
         if(rc < 16) {
             perror("read(random)");
             exit(1);
@@ -577,7 +577,7 @@ main(int argc, char **argv)
                     continue;
                 }
                 if(memcmp(buf + 6, &sixteen, 2) != 0 ||
-                   memcmp(buf + 8, unique_id, 16) != 0) {
+                   memcmp(buf + 8, client_id, 16) != 0) {
                     fprintf(stderr, "Received stateful reply not for me.\n");
                     continue;
                 }
@@ -744,7 +744,7 @@ main(int argc, char **argv)
             buf[3] = 0;
             memcpy(buf + 4, &lease_time, 2);
             memcpy(buf + 6, &sixteen, 2);
-            memcpy(buf + 8, unique_id, 16);
+            memcpy(buf + 8, client_id, 16);
             rc = build_stateful_data(buf + 24,
                                      ipv4_address[0] == 0 ?
                                      NULL : ipv4_address);
