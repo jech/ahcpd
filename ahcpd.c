@@ -125,7 +125,7 @@ main(int argc, char **argv)
     int dummy = 0;
     int expires_delay = 3600;
     int query_timeout = INITIAL_QUERY_TIMEOUT;
-    int stateful_request_timeout = 1000;
+    int stateful_request_timeout = 2000;
 
     i = 1;
     while(i < argc && argv[i][0] == '-') {
@@ -812,7 +812,8 @@ main(int argc, char **argv)
         if(stateful_expire_time.tv_sec > 0 &&
            timeval_compare(&stateful_expire_time, &now) <= 0) {
             unaccept_stateful_data(interfaces);
-            set_timeout(-1, STATEFUL_REQUEST, -1, 1);
+            set_timeout(-1, STATEFUL_REQUEST, 2000, 1);
+            stateful_request_timeout = 2000;
         }
     }
     if(config_data) {
