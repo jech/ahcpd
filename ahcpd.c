@@ -106,6 +106,7 @@ valid(int nowsecs, int origin, int expires, int age)
     return MIN(expires - origin - age, expires - nowsecs);
 }
 
+#define QUERY_DELAY 1000
 #define INITIAL_QUERY_TIMEOUT 2000
 #define MAX_QUERY_TIMEOUT 30000
 #define STATEFUL_REQUEST_DELAY 8000
@@ -352,7 +353,7 @@ main(int argc, char **argv)
             stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
         }
     } else {
-        set_timeout(-1, QUERY, query_timeout, 1);
+        set_timeout(-1, QUERY, QUERY_DELAY, 1);
         set_timeout(-1, REPLY, -1, 1);
     }
 
