@@ -437,6 +437,9 @@ lease_init(const char *dir, unsigned int first, unsigned int last)
     DIR *d;
     char buf[256];
 
+    if(first <= 0x1000000 || first >= last)
+        return -1;
+
     hints = calloc(MAX_LEASE_HINTS, sizeof(struct lease_hint));
     if(hints == NULL)
         return -1;
