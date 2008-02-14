@@ -53,6 +53,7 @@ const struct timeval zero = {0, 0};
 
 static volatile sig_atomic_t exiting = 0;
 unsigned char client_id[16];
+char *client_id_file = "/var/lib/ahcpd-client-id";
 unsigned char buf[BUFFER_SIZE];
 unsigned int data_origin = 0, data_expires = 0, data_age_origin = 0;
 int nodns = 0, nostate = 0;
@@ -262,11 +263,6 @@ main(int argc, char **argv)
         perror("open(random)");
         seed = now.tv_sec ^ now.tv_usec;
     } else {
-        rc = read(fd, client_id, 16);
-        if(rc < 16) {
-            perror("read(random)");
-            exit(1);
-        }
         rc = read(fd, &seed, sizeof(unsigned int));
         if(rc < sizeof(unsigned int)) {
             perror("read(random)");
@@ -275,6 +271,41 @@ main(int argc, char **argv)
         close(fd);
     }
     srandom(seed);
+
+    if(client_id_file && client_id_file[0] != '\0') {
+        fd = open(client_id_file, O_RDONLY);
+        if(fd >= 0) {
+            rc = read(fd, client_id, 16);
+            if(rc == 16) {
+                close(fd);
+                goto client_id_done;
+            }
+            close(fd);
+        }
+    }
+
+    fd = open("/dev/random", O_RDONLY);
+    rc = read(fd, client_id, 16);
+    if(rc != 16) {
+        perror("read(random)");
+        exit(1);
+    }
+    close(fd);
+
+    if(client_id_file && client_id_file[0] != '\0') {
+        fd = open(client_id_file, O_RDWR | O_TRUNC | O_CREAT, 0600);
+        if(fd < 0) {
+            perror("creat(client_id)");
+        } else {
+            rc = write(fd, client_id, 16);
+            if(rc != 16) {
+                perror("write(client_id)");
+                unlink(client_id_file);
+            }
+            close(fd);
+        }
+    }
+ client_id_done:
 
     s = ahcp_socket(port);
     if(s < 0) {
