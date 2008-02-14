@@ -650,9 +650,13 @@ main(int argc, char **argv)
                                (struct sockaddr*)&sin6, sizeof(sin6));
                 if(rc < 0)
                     perror("ahcp_send");
-                set_timeout(i, REPLY,
-                            MAX((data_expires - data_origin) * 125, 2000),
-                            1);
+                if(!authority)
+                    set_timeout(i, REPLY,
+                                MAX((data_expires - data_origin) * 125, 120000),
+                                1);
+                else
+                    set_timeout(i, REPLY, MAX(expires_delay * 125, 30000),
+                                1);
             }
 
             if(networks[i].query_time.tv_sec > 0 &&
