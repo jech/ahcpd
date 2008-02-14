@@ -360,6 +360,7 @@ release_lease(const unsigned char *ipv4,
     unsigned char buf[700];
     char *f;
     int fd, rc;
+    struct timeval now;
 
     if(first_address == 0 || lease_directory == NULL)
         return -1;
@@ -387,10 +388,15 @@ release_lease(const unsigned char *ipv4,
         }
     }
 
-    rc = unlink(f);
+    gettimeofday(&now, NULL);
+
+    rc = update_lease_file(fd, now.tv_sec);
     if(rc < 0) {
-        perror("unlink(lease_file)");
-        return -1;
+        rc = unlink(f);
+        if(rc < 0) {
+            perror("unlink(lease_file)");
+            goto fail;
+        }
     }
 
     close_lease_file(f, fd);
