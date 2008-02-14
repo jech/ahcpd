@@ -105,7 +105,7 @@ parse_stateful_request(unsigned char *buf, int len,
     *lease_time_r = lease_time;
     *uid_r = buf + 8;
     *ulen_r = ulen;
-    *data_r = buf + 8 + ulen + 2 + dlen;
+    *data_r = buf + 8 + ulen + 2;
     *dlen_r = dlen;
     return 1;
 }
