@@ -582,6 +582,9 @@ take_lease(const unsigned char *client_id, int client_id_len,
     if(first_address == 0 || lease_directory == NULL)
         return -1;
 
+    if(client_id_len <= 2)
+        return -1;
+
     time = *lease_time;
     if(time > MAX_LEASE_TIME)
         time = MAX_LEASE_TIME;
