@@ -20,5 +20,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-int make_lease(unsigned char *buf, int len,
+int lease_init(const char *dir, unsigned int first, unsigned int last);
+int take_lease(const unsigned char *client_id, int client_id_len,
+               const unsigned char *suggested_ipv4,
                unsigned char *ipv4_return, unsigned short *lease_time);
+int release_lease(const unsigned char *ipv4,
+                  const unsigned char *client_id, int client_id_len);

@@ -24,12 +24,15 @@ extern unsigned char *config_data;
 extern int data_len;
 extern unsigned char *stateful_servers;
 extern unsigned int stateful_servers_len;
+extern unsigned char ipv4_address[4];
 
 int data_changed(unsigned char *data, int len);
 int accept_data(unsigned char *data, int len, char **interfaces, int dummy);
 int unaccept_data(char **interfaces, int dummy);
 
+int
+parse_stateful_data(unsigned char *data, int len, unsigned char *ipv4_return);
 int accept_stateful_data(unsigned char *data, int len,
                          unsigned short lease_time, char **interfaces);
 int unaccept_stateful_data(char **interfaces);
-int build_stateful_reply(unsigned char *buf, const unsigned char *ipv4);
+int build_stateful_data(unsigned char *buf, const unsigned char *ipv4);

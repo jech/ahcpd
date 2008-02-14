@@ -174,6 +174,32 @@ main(int argc, char **argv)
             if(i >= argc) goto usage;
             debug_level = atoi(argv[i]);
             i++;
+#ifndef NO_STATEFUL_SERVER
+        } else if(strcmp(argv[i], "-S") == 0) {
+            unsigned char ipv4[4];
+            char *dir;
+            unsigned int first, last;
+            int rc;
+            i++;
+            if(i >= argc) goto usage;
+            rc = inet_pton(AF_INET, argv[i], ipv4);
+            if(rc <= 0) goto usage;
+            memcpy(&first, ipv4, 4);
+            first = ntohl(first);
+            i++;
+            if(i >= argc) goto usage;
+            rc = inet_pton(AF_INET, argv[i], ipv4);
+            if(rc <= 0) goto usage;
+            memcpy(&last, ipv4, 4);
+            last = ntohl(last);
+            i++;
+            if(i >= argc) goto usage;
+            dir = argv[i];
+            i++;
+            rc = lease_init(dir, first, last);
+            if(rc < 0)
+                goto usage;
+#endif
         } else {
             goto usage;
         }
@@ -486,7 +512,8 @@ main(int argc, char **argv)
                 }
             } else if(buf[2] == AHCP_STATEFUL_REQUEST) {
                 unsigned short lease_time;
-                unsigned short uid_len;
+                unsigned short uid_len, len;
+                unsigned char suggested_ipv4[4] = {0, 0, 0, 0};
                 unsigned char ipv4[4];
 
                 if(rc < 8)
@@ -496,12 +523,19 @@ main(int argc, char **argv)
                 lease_time = ntohs(lease_time);
                 memcpy(&uid_len, buf + 6, 2);
                 uid_len = ntohs(uid_len);
-                if(rc < 8 + uid_len)
+                if(rc < 8 + uid_len + 2)
                     continue;
                 if(uid_len > 500)
                     continue;
-
-                rc = make_lease(buf + 8, uid_len, ipv4, &lease_time);
+                memcpy(&len, buf + 8 + uid_len, 2);
+                len = ntohs(len);
+                if(rc < 8 + uid_len + 2 + len)
+                    continue;
+                parse_stateful_data(buf + 8 + uid_len + 2, len,
+                                    suggested_ipv4);
+                rc = take_lease(buf + 8, uid_len,
+                                suggested_ipv4[0] == 0 ? NULL : suggested_ipv4,
+                                ipv4, &lease_time);
 
                 buf[0] = 43;
                 buf[1] = 0;
@@ -519,7 +553,7 @@ main(int argc, char **argv)
                     buf[3] = 0;
                     memcpy(buf + 4, &lease_time, 2);
                     i = 8 + uid_len;
-                    i += build_stateful_reply(buf + i, ipv4);
+                    i += build_stateful_data(buf + i, ipv4);
                     ahcp_send(s, buf, i,
                               (struct sockaddr*)&sin6, sizeof(sin6));
                 }
@@ -686,6 +720,8 @@ main(int argc, char **argv)
            timeval_compare(&stateful_request_time, &now) <= 0) {
             unsigned short lease_time = htons(30 * 60);
             unsigned short sixteen = htons(16);
+            int rc;
+
             if(stateful_servers_len < 16) {
                 fprintf(stderr,
                         "Trying to send stateful query with no servers.\n");
@@ -699,14 +735,16 @@ main(int argc, char **argv)
             memcpy(buf + 4, &lease_time, 2);
             memcpy(buf + 6, &sixteen, 2);
             memcpy(buf + 8, unique_id, 16);
-
+            rc = build_stateful_data(buf + 24,
+                                     ipv4_address[0] == 0 ?
+                                     NULL : ipv4_address);
             memset(&sin6, 0, sizeof(sin6));
             sin6.sin6_family = AF_INET6;
             memcpy(&sin6.sin6_addr, stateful_servers, 16);
             sin6.sin6_port = htons(port);
             if(debug_level >= 2)
                 printf("Sending stateful request.\n");
-            rc = ahcp_send(s, buf, 24,
+            rc = ahcp_send(s, buf, 24 + rc,
                            (struct sockaddr*)&sin6, sizeof(sin6));
             if(rc < 0)
                 perror("ahcp_send");

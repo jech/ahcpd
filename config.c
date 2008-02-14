@@ -482,18 +482,10 @@ parse_address_list(const unsigned char *data, int len)
 }
 
 int
-accept_stateful_data(unsigned char *data, int len, unsigned short lease_time,
-                     char **interfaces)
+parse_stateful_data(unsigned char *data, int len, unsigned char *ipv4_return)
 {
-    const unsigned char z[4] = {0, 0, 0, 0};
+    int i, opt, olen, mandatory = 0;
     unsigned char ipv4[4] = {0, 0, 0, 0};
-
-    int i, rc, opt, olen, mandatory = 0;
-
-    if(!config_data) {
-        fprintf(stderr, "Attempted to configure IPv4 while unconfigured.\n");
-        return -1;
-    }
 
     i = 0;
     while(i < len) {
@@ -524,7 +516,25 @@ accept_stateful_data(unsigned char *data, int len, unsigned short lease_time,
         i += olen + 2;
     }
 
-    if(memcmp(ipv4, z, 4) == 0)
+    memcpy(ipv4_return, ipv4, 4);
+    return 1;
+}
+
+int
+accept_stateful_data(unsigned char *data, int len, unsigned short lease_time,
+                     char **interfaces)
+{
+    const unsigned char z[4] = {0, 0, 0, 0};
+    unsigned char ipv4[4] = {0, 0, 0, 0};
+    int rc;
+
+    if(!config_data) {
+        fprintf(stderr, "Attempted to configure IPv4 while unconfigured.\n");
+        return -1;
+    }
+
+    rc = parse_stateful_data(data, len, ipv4);
+    if(rc < 0)
         return -1;
 
     if(memcmp(ipv4_address, z, 4) == 0) {
@@ -565,12 +575,19 @@ unaccept_stateful_data(char **interfaces)
 }
 
 int
-build_stateful_reply(unsigned char *buf, const unsigned char *ipv4)
+build_stateful_data(unsigned char *buf, const unsigned char *ipv4)
 {
+    const unsigned short zero = htons(0);
     const unsigned short six = htons(6);
-    memcpy(buf, &six, 2);
-    buf[2] = OPT_IPv4_ADDRESS;
-    buf[3] = 4;
-    memcpy(buf + 4, ipv4, 4);
-    return 8;
+
+    if(ipv4) {
+        memcpy(buf, &six, 2);
+        buf[2] = OPT_IPv4_ADDRESS;
+        buf[3] = 4;
+        memcpy(buf + 4, ipv4, 4);
+        return 8;
+    } else {
+        memcpy(buf, &zero, 2);
+        return 2;
+    }
 }
