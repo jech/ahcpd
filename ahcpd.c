@@ -299,6 +299,10 @@ main(int argc, char **argv)
     if(authority) {
         set_timeout(-1, QUERY, -1, 1);
         set_timeout(-1, REPLY, 5000, 1);
+        if(!nostate && stateful_servers_len >= 16) {
+            set_timeout(-1, STATEFUL_REQUEST, 8 * 1000, 1);
+            stateful_request_timeout = 2000;
+        }
     } else {
         set_timeout(-1, QUERY, query_timeout, 1);
         set_timeout(-1, REPLY, -1, 1);
