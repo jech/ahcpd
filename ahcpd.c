@@ -108,6 +108,7 @@ valid(int nowsecs, int origin, int expires, int age)
 
 #define INITIAL_QUERY_TIMEOUT 2000
 #define MAX_QUERY_TIMEOUT 30000
+#define STATEFUL_REQUEST_DELAY 8000
 #define INITIAL_STATEFUL_REQUEST_TIMEOUT 2000
 #define MAX_STATEFUL_REQUEST_TIMEOUT 60000
 
@@ -125,7 +126,7 @@ main(int argc, char **argv)
     int dummy = 0;
     int expires_delay = 3600;
     int query_timeout = INITIAL_QUERY_TIMEOUT;
-    int stateful_request_timeout = 2000;
+    int stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
 
     i = 1;
     while(i < argc && argv[i][0] == '-') {
@@ -336,8 +337,8 @@ main(int argc, char **argv)
         set_timeout(-1, QUERY, -1, 1);
         set_timeout(-1, REPLY, 5000, 1);
         if(!nostate && stateful_servers_len >= 16) {
-            set_timeout(-1, STATEFUL_REQUEST, 8 * 1000, 1);
-            stateful_request_timeout = 2000;
+            set_timeout(-1, STATEFUL_REQUEST, STATEFUL_REQUEST_DELAY, 1);
+            stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
         }
     } else {
         set_timeout(-1, QUERY, query_timeout, 1);
@@ -543,8 +544,10 @@ main(int argc, char **argv)
                             set_timeout(-1, REPLY, 3000, 0);
                         }
                         if(!nostate && stateful_servers_len >= 16) {
-                            set_timeout(-1, STATEFUL_REQUEST, 8 * 1000, 1);
-                            stateful_request_timeout = 2000;
+                            set_timeout(-1, STATEFUL_REQUEST,
+                                        STATEFUL_REQUEST_DELAY, 1);
+                            stateful_request_timeout =
+                                INITIAL_STATEFUL_REQUEST_TIMEOUT;
                         } else {
                             set_timeout(-1, STATEFUL_REQUEST, -1, 1);
                         }
@@ -655,13 +658,16 @@ main(int argc, char **argv)
                         set_timeout(-1, STATEFUL_REQUEST,
                                     MIN(lease_time * 2000 / 3, 60 * 60 * 1000),
                                     1);
-                        stateful_request_timeout = 2000;
+                        stateful_request_timeout =
+                            INITIAL_STATEFUL_REQUEST_TIMEOUT;
                     } else {
-                        set_timeout(-1, STATEFUL_REQUEST, 60 * 1000, 1);
+                        set_timeout(-1, STATEFUL_REQUEST,
+                                    MAX_STATEFUL_REQUEST_TIMEOUT, 1);
                         stateful_request_timeout = MAX_STATEFUL_REQUEST_TIMEOUT;
                     }
                 } else {
-                    set_timeout(-1, STATEFUL_REQUEST, 60 * 1000, 1);
+                    set_timeout(-1, STATEFUL_REQUEST,
+                                MAX_STATEFUL_REQUEST_TIMEOUT, 1);
                     stateful_request_timeout = MAX_STATEFUL_REQUEST_TIMEOUT;
                 }
             } else {
@@ -812,8 +818,8 @@ main(int argc, char **argv)
         if(stateful_expire_time.tv_sec > 0 &&
            timeval_compare(&stateful_expire_time, &now) <= 0) {
             unaccept_stateful_data(interfaces);
-            set_timeout(-1, STATEFUL_REQUEST, 2000, 1);
-            stateful_request_timeout = 2000;
+            set_timeout(-1, STATEFUL_REQUEST, STATEFUL_REQUEST_DELAY, 1);
+            stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
         }
     }
     if(config_data) {
