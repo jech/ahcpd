@@ -74,12 +74,13 @@ parse_reply(unsigned char *buf, int len,
 }
 
 int
-parse_stateful_request(unsigned char *buf, int len,
-                       unsigned short *lease_time_r,
-                       unsigned char **uid_r, unsigned short *ulen_r,
-                       unsigned char **data_r, unsigned short *dlen_r)
+parse_stateful_packet(unsigned char *buf, int len,
+                      unsigned short *lease_time_r,
+                      unsigned char **uid_r, unsigned short *ulen_r,
+                      unsigned char **data_r, unsigned short *dlen_r)
 {
     unsigned short lease_time, ulen, dlen;
+    unsigned char *uid, *data;
 
     if(len < 8)
         return -1;
@@ -93,19 +94,27 @@ parse_stateful_request(unsigned char *buf, int len,
     if(ulen > 500)
         return -1;
 
-    if(len < 8 + ulen + 2)
+    if(len < 8 + ulen)
         return -1;
 
-    memcpy(&dlen, buf + 8 + ulen, 2);
-    dlen = ntohs(len);
+    uid = buf + 8;
 
-    if(len < 8 + ulen + 2 + dlen)
-        return -1;
+    if(len < 8 + ulen + 2) {
+        data = NULL;
+        dlen = 0;
+    } else {
+        memcpy(&dlen, buf + 8 + ulen, 2);
+        dlen = ntohs(dlen);
+
+        if(len < 8 + ulen + 2 + dlen)
+            return -1;
+        data = buf + 8 + ulen + 2;
+    }
 
     *lease_time_r = lease_time;
-    *uid_r = buf + 8;
+    *uid_r = uid;
     *ulen_r = ulen;
-    *data_r = buf + 8 + ulen + 2;
+    *data_r = data;
     *dlen_r = dlen;
     return 1;
 }

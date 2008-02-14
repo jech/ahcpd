@@ -562,9 +562,9 @@ main(int argc, char **argv)
                 if(time_broken(now.tv_sec))
                     continue;
 
-                rc = parse_stateful_request(buf, rc,
-                                            &lease_time, &uid, &ulen,
-                                            &data, &dlen);
+                rc = parse_stateful_packet(buf, rc,
+                                           &lease_time, &uid, &ulen,
+                                           &data, &dlen);
                 if(rc < 0) {
                     fprintf(stderr, "Corrupted stateful request.\n");
                     continue;
@@ -614,18 +614,20 @@ main(int argc, char **argv)
                 }
             } else if(buf[2] == AHCP_STATEFUL_ACK ||
                       buf[2] == AHCP_STATEFUL_NAK) {
-                unsigned short sixteen = htons(16);
-                if(rc < 24) {
-                    fprintf(stderr, "Truncated AHCP packet.\n");
-                    continue;
-                }
+                unsigned short lease_time, ulen, dlen;
+                unsigned char *data, *uid;
+
+                rc = parse_stateful_packet(buf, rc,
+                                           &lease_time, &uid, &ulen,
+                                           &data, &dlen);
+
                 if(nostate || stateful_servers_len < 16 ||
                    memcmp(stateful_servers, &sin6.sin6_addr, 16) != 0) {
                     fprintf(stderr, "Received unexpected stateful reply.\n");
                     continue;
                 }
-                if(memcmp(buf + 6, &sixteen, 2) != 0 ||
-                   memcmp(buf + 8, unique_id, 16) != 0) {
+
+                if(ulen != 16 || memcmp(uid, unique_id, 16) != 0) {
                     fprintf(stderr, "Received stateful reply not for me.\n");
                     continue;
                 }
@@ -635,22 +637,10 @@ main(int argc, char **argv)
                            buf[2] == AHCP_STATEFUL_ACK ? "ACK" : "NAK");
 
                 if(buf[2] == AHCP_STATEFUL_ACK) {
-                    unsigned short len, lease_time;
-                    if(rc < 26) {
-                        fprintf(stderr, "Truncated AHCP packet.\n");
-                        continue;
-                    }
-                    memcpy(&lease_time, buf + 4, 2);
-                    lease_time = ntohs(lease_time);
                     if(lease_time < 4)
                         continue;
-                    memcpy(&len, buf + 24, 2);
-                    len = ntohs(len);
-                    if(rc < len + 26) {
-                        fprintf(stderr, "Truncated AHCP packet.\n");
-                        continue;
-                    }
-                    rc = accept_stateful_data(buf + 26, len, lease_time,
+
+                    rc = accept_stateful_data(data, dlen, lease_time,
                                               interfaces);
                     if(rc >= 0) {
                         set_timeout(-1, STATEFUL_EXPIRE, lease_time * 1000, 1);
@@ -665,6 +655,7 @@ main(int argc, char **argv)
                         stateful_request_timeout = MAX_STATEFUL_REQUEST_TIMEOUT;
                     }
                 } else {
+                    /* NAK */
                     set_timeout(-1, STATEFUL_REQUEST,
                                 MAX_STATEFUL_REQUEST_TIMEOUT, 1);
                     stateful_request_timeout = MAX_STATEFUL_REQUEST_TIMEOUT;
