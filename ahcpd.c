@@ -556,6 +556,9 @@ main(int argc, char **argv)
                 unsigned char suggested_ipv4[4] = {0, 0, 0, 0};
                 unsigned char ipv4[4];
 
+                if(debug_level >= 2)
+                    printf("Received stateful request.\n");
+
                 if(time_broken(now.tv_sec))
                     continue;
 
@@ -583,6 +586,8 @@ main(int argc, char **argv)
                 buf[0] = 43;
                 buf[1] = 0;
                 if(rc < 0) {
+                    if(debug_level >= 2)
+                        printf("Sending stateful NAK.\n");
                     buf[2] = AHCP_STATEFUL_NAK;
                     buf[3] = 0;
                     buf[4] = 0;
@@ -591,6 +596,8 @@ main(int argc, char **argv)
                               (struct sockaddr*)&sin6, sizeof(sin6));
                 } else {
                     int i;
+                    if(debug_level >= 2)
+                        printf("Sending stateful ACK.\n");
                     lease_time = htons(lease_time);
                     buf[2] = AHCP_STATEFUL_ACK;
                     buf[3] = 0;
