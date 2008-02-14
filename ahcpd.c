@@ -298,7 +298,7 @@ main(int argc, char **argv)
     close(fd);
 
     if(unique_id_file && unique_id_file[0] != '\0') {
-        fd = open(unique_id_file, O_RDWR | O_TRUNC | O_CREAT, 0600);
+        fd = open(unique_id_file, O_RDWR | O_TRUNC | O_CREAT, 0644);
         if(fd < 0) {
             perror("creat(unique_id)");
         } else {
