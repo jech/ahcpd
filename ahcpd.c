@@ -52,8 +52,8 @@ struct timeval now;
 const struct timeval zero = {0, 0};
 
 static volatile sig_atomic_t exiting = 0;
-unsigned char client_id[16];
-char *client_id_file = "/var/lib/ahcpd-client-id";
+unsigned char unique_id[16];
+char *unique_id_file = "/var/lib/ahcpd-unique-id";
 unsigned char buf[BUFFER_SIZE];
 unsigned int data_origin = 0, data_expires = 0, data_age_origin = 0;
 int nodns = 0, nostate = 0;
@@ -178,7 +178,7 @@ main(int argc, char **argv)
         } else if(strcmp(argv[i], "-i") == 0) {
             i++;
             if(i >= argc) goto usage;
-            client_id_file = argv[i];
+            unique_id_file = argv[i];
             i++;
 #ifndef NO_STATEFUL_SERVER
         } else if(strcmp(argv[i], "-S") == 0) {
@@ -277,40 +277,40 @@ main(int argc, char **argv)
     }
     srandom(seed);
 
-    if(client_id_file && client_id_file[0] != '\0') {
-        fd = open(client_id_file, O_RDONLY);
+    if(unique_id_file && unique_id_file[0] != '\0') {
+        fd = open(unique_id_file, O_RDONLY);
         if(fd >= 0) {
-            rc = read(fd, client_id, 16);
+            rc = read(fd, unique_id, 16);
             if(rc == 16) {
                 close(fd);
-                goto client_id_done;
+                goto unique_id_done;
             }
             close(fd);
         }
     }
 
     fd = open("/dev/random", O_RDONLY);
-    rc = read(fd, client_id, 16);
+    rc = read(fd, unique_id, 16);
     if(rc != 16) {
         perror("read(random)");
         exit(1);
     }
     close(fd);
 
-    if(client_id_file && client_id_file[0] != '\0') {
-        fd = open(client_id_file, O_RDWR | O_TRUNC | O_CREAT, 0600);
+    if(unique_id_file && unique_id_file[0] != '\0') {
+        fd = open(unique_id_file, O_RDWR | O_TRUNC | O_CREAT, 0600);
         if(fd < 0) {
-            perror("creat(client_id)");
+            perror("creat(unique_id)");
         } else {
-            rc = write(fd, client_id, 16);
+            rc = write(fd, unique_id, 16);
             if(rc != 16) {
-                perror("write(client_id)");
-                unlink(client_id_file);
+                perror("write(unique_id)");
+                unlink(unique_id_file);
             }
             close(fd);
         }
     }
- client_id_done:
+ unique_id_done:
 
     s = ahcp_socket(port);
     if(s < 0) {
@@ -613,7 +613,7 @@ main(int argc, char **argv)
                     continue;
                 }
                 if(memcmp(buf + 6, &sixteen, 2) != 0 ||
-                   memcmp(buf + 8, client_id, 16) != 0) {
+                   memcmp(buf + 8, unique_id, 16) != 0) {
                     fprintf(stderr, "Received stateful reply not for me.\n");
                     continue;
                 }
@@ -780,7 +780,7 @@ main(int argc, char **argv)
             buf[3] = 0;
             memcpy(buf + 4, &lease_time, 2);
             memcpy(buf + 6, &sixteen, 2);
-            memcpy(buf + 8, client_id, 16);
+            memcpy(buf + 8, unique_id, 16);
             rc = build_stateful_data(buf + 24,
                                      ipv4_address[0] == 0 ?
                                      NULL : ipv4_address);
