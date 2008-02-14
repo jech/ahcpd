@@ -609,7 +609,7 @@ main(int argc, char **argv)
                 }
             } else if(buf[2] == AHCP_STATEFUL_RELEASE) {
                 if(debug_level >= 2)
-                    printf("Received satateful release.\n");
+                    printf("Received stateful release.\n");
             } else if(buf[2] == AHCP_STATEFUL_ACK ||
                       buf[2] == AHCP_STATEFUL_NAK) {
                 unsigned short sixteen = htons(16);
