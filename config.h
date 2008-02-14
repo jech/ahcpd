@@ -32,3 +32,4 @@ int unaccept_data(char **interfaces, int dummy);
 int accept_stateful_data(unsigned char *data, int len,
                          unsigned short lease_time, char **interfaces);
 int unaccept_stateful_data(char **interfaces);
+int build_stateful_reply(unsigned char *buf, const unsigned char *ipv4);

@@ -564,4 +564,13 @@ unaccept_stateful_data(char **interfaces)
     }
 }
 
-
+int
+build_stateful_reply(unsigned char *buf, const unsigned char *ipv4)
+{
+    const unsigned short six = htons(6);
+    memcpy(buf, &six, 2);
+    buf[2] = OPT_IPv4_ADDRESS;
+    buf[3] = 4;
+    memcpy(buf + 4, ipv4, 4);
+    return 8;
+}

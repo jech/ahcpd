@@ -513,19 +513,13 @@ main(int argc, char **argv)
                     ahcp_send(s, buf, 8 + uid_len,
                               (struct sockaddr*)&sin6, sizeof(sin6));
                 } else {
-                    const unsigned short six = htons(6);
                     int i;
                     lease_time = htons(lease_time);
                     buf[2] = AHCP_STATEFUL_ACK;
                     buf[3] = 0;
                     memcpy(buf + 4, &lease_time, 2);
                     i = 8 + uid_len;
-                    memcpy(buf + i, &six, 2);
-                    i += 2;
-                    buf[i++] = OPT_IPv4_ADDRESS;
-                    buf[i++] = 4;
-                    memcpy(buf + i, ipv4, 4);
-                    i += 4;
+                    i += build_stateful_reply(buf + i, ipv4);
                     ahcp_send(s, buf, i,
                               (struct sockaddr*)&sin6, sizeof(sin6));
                 }
