@@ -322,7 +322,7 @@ get_lease(const unsigned char *ipv4, unsigned short lease_time,
             close_lease_file(f, fd);
             goto create;
         }
-        return -1;
+        goto fail;
     }
 
  create:
