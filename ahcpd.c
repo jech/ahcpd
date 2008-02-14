@@ -949,11 +949,6 @@ ahcp_socket(int port)
     if(rc < 0)
         goto fail;
 
-    rc = setsockopt(s, IPPROTO_IPV6, IPV6_UNICAST_HOPS,
-                    &one, sizeof(one));
-    if(rc < 0)
-        goto fail;
-
     rc = setsockopt(s, IPPROTO_IPV6, IPV6_MULTICAST_HOPS,
                     &one, sizeof(one));
     if(rc < 0)
