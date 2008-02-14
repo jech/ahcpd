@@ -121,7 +121,7 @@ main(int argc, char **argv)
     struct in6_addr group;
     struct ipv6_mreq mreq;
     struct sockaddr_in6 sin6;
-    int fd, rc, s, i, j;
+    int fd, rc, s, i, j, net;
     unsigned int seed;
     int dummy = 0;
     int expires_delay = 3600;
@@ -419,16 +419,16 @@ main(int argc, char **argv)
                 continue;
             }
             if(IN6_IS_ADDR_LINKLOCAL(&sin6.sin6_addr)) {
-                for(i = 0; i < numnetworks; i++) {
-                    if(networks[i].ifindex == sin6.sin6_scope_id)
+                for(net = 0; net < numnetworks; net++) {
+                    if(networks[net].ifindex == sin6.sin6_scope_id)
                         break;
                 }
-                if(i >= numnetworks) {
+                if(net >= numnetworks) {
                     fprintf(stderr, "Received packet on unknown network.\n");
                     continue;
                 }
             } else {
-                i = -1;
+                net = -1;
             }
 
             if(!validate_packet(buf, rc)) {
@@ -438,27 +438,24 @@ main(int argc, char **argv)
             }
 
             if(buf[2] == AHCP_QUERY) {
-                if(i < 0) {
-                    fprintf(stderr, "Received non-local query.\n");
-                    continue;
-                }
-                if(i < 0) {
+                if(net < 0) {
                     fprintf(stderr, "Received non-local query.\n");
                     continue;
                 }
                 if(debug_level >= 2)
-                    printf("Received AHCP query.\n");
+                    printf("Received AHCP query on %s.\n",
+                           networks[net].ifname);
                 /* Since peers use an initial timeout of 2 seconds,
                    this should be no more than 1.3s (due to jitter). */
                 if(config_data)
-                    set_timeout(i, REPLY, 1000, 0);
+                    set_timeout(net, REPLY, 1000, 0);
             } else if(buf[2] == AHCP_REPLY) {
                 /* Reply */
                 unsigned int origin, expires;
                 unsigned short age, dlen;
                 unsigned char *data;
 
-                if(i < 0) {
+                if(net < 0) {
                     fprintf(stderr, "Received non-local reply.\n");
                     continue;
                 }
@@ -467,7 +464,8 @@ main(int argc, char **argv)
                     continue;
                 }
                 if(debug_level >= 2)
-                    printf("Received AHCP reply.\n");
+                    printf("Received AHCP reply on %s.\n",
+                           networks[net].ifname);
 
                 rc = parse_reply(buf, rc,
                                  &origin, &expires, &age, &data, &dlen);
@@ -507,7 +505,7 @@ main(int argc, char **argv)
                     if(age > 0 && config_data) {
                         /* The person sending stale data is not
                            authoritative. */
-                        set_timeout(i, REPLY, 10000, 0);
+                        set_timeout(net, REPLY, 10000, 0);
                     }
                     continue;
                 }
@@ -703,15 +701,15 @@ main(int argc, char **argv)
             }
         }
 
-        for(i = 0; i < numnetworks; i++) {
-            if(networks[i].reply_time.tv_sec > 0 &&
-               timeval_compare(&networks[i].reply_time, &now) <= 0) {
+        for(net = 0; net < numnetworks; net++) {
+            if(networks[net].reply_time.tv_sec > 0 &&
+               timeval_compare(&networks[net].reply_time, &now) <= 0) {
                 unsigned int origin, expires;
                 unsigned short age, len;
 
                 if(!config_data) {
                     /* This can happen if we expired in the meantime. */
-                    set_timeout(i, REPLY, -1, 1);
+                    set_timeout(net, REPLY, -1, 1);
                     continue;
                 }
 
@@ -740,24 +738,24 @@ main(int argc, char **argv)
                 sin6.sin6_family = AF_INET6;
                 memcpy(&sin6.sin6_addr, &group, 16);
                 sin6.sin6_port = htons(port);
-                sin6.sin6_scope_id = networks[i].ifindex;
+                sin6.sin6_scope_id = networks[net].ifindex;
                 if(debug_level >= 2)
-                    printf("Sending AHCP reply on %s.\n", networks[i].ifname);
+                    printf("Sending AHCP reply on %s.\n", networks[net].ifname);
                 rc = ahcp_send(s, buf, 20 + data_len,
                                (struct sockaddr*)&sin6, sizeof(sin6));
                 if(rc < 0)
                     perror("ahcp_send");
                 if(!authority)
-                    set_timeout(i, REPLY,
+                    set_timeout(net, REPLY,
                                 MAX((data_expires - data_origin) * 125, 120000),
                                 1);
                 else
-                    set_timeout(i, REPLY, MAX(expires_delay * 125, 30000),
+                    set_timeout(net, REPLY, MAX(expires_delay * 125, 30000),
                                 1);
             }
 
-            if(networks[i].query_time.tv_sec > 0 &&
-               timeval_compare(&networks[i].query_time, &now) <= 0) {
+            if(networks[net].query_time.tv_sec > 0 &&
+               timeval_compare(&networks[net].query_time, &now) <= 0) {
                 buf[0] = 43;
                 buf[1] = 0;
                 buf[2] = AHCP_QUERY;
@@ -767,20 +765,21 @@ main(int argc, char **argv)
                 sin6.sin6_family = AF_INET6;
                 memcpy(&sin6.sin6_addr, &group, 16);
                 sin6.sin6_port = htons(port);
-                sin6.sin6_scope_id = networks[i].ifindex;
+                sin6.sin6_scope_id = networks[net].ifindex;
                 if(debug_level >= 2)
-                    printf("Sending AHCP request on %s.\n", networks[i].ifname);
+                    printf("Sending AHCP request on %s.\n",
+                           networks[net].ifname);
                 rc = ahcp_send(s, buf, 4,
                                (struct sockaddr*)&sin6, sizeof(sin6));
                 if(rc < 0)
                     perror("ahcp_send");
                 if(authority)
-                    set_timeout(i, QUERY, -1, 1);
+                    set_timeout(net, QUERY, -1, 1);
                 else if(config_data)
-                    set_timeout(i, QUERY, 600 * 1000, 1);
+                    set_timeout(net, QUERY, 600 * 1000, 1);
                 else {
                     query_timeout = MIN(2 * query_timeout, MAX_QUERY_TIMEOUT);
-                    set_timeout(i, QUERY, query_timeout, 1);
+                    set_timeout(net, QUERY, query_timeout, 1);
                 }
             }
         }
