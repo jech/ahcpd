@@ -63,6 +63,7 @@ release_lease(const unsigned char *ipv4,
 
 #define MAX_LEASE_TIME 3600
 #define LEASE_GRACE_TIME 600
+#define LEASE_PURGE_TIME (15 * 24 * 3600)
 
 #define MAX_LEASE_HINTS 256
 
@@ -436,6 +437,7 @@ lease_init(const char *dir, unsigned int first, unsigned int last)
 {
     DIR *d;
     char buf[256];
+    struct timeval now;
 
     if(first <= 0x1000000 || first >= last)
         return -1;
@@ -445,6 +447,8 @@ lease_init(const char *dir, unsigned int first, unsigned int last)
         return -1;
     numhints = 0;
     maxhints = MAX_LEASE_HINTS;
+
+    gettimeofday(&now, NULL);
 
     d = opendir(dir);
     if(d == NULL) {
@@ -456,7 +460,7 @@ lease_init(const char *dir, unsigned int first, unsigned int last)
         struct dirent *e;
         unsigned char ipv4[4], client_buf[700];
         unsigned int a;
-        int fd, rc;
+        int lease_end, fd, rc;
 
         e = readdir(d);
         if(e == NULL) break;
@@ -473,10 +477,25 @@ lease_init(const char *dir, unsigned int first, unsigned int last)
             fprintf(stderr, "Inaccessible lease file %s.\n", e->d_name);
             continue;
         }
-        rc = read_lease_file(fd, NULL, NULL, ipv4, client_buf, 700);
+        rc = read_lease_file(fd, NULL, &lease_end, ipv4, client_buf, 700);
         close(fd);
         if(rc < 0) {
             fprintf(stderr, "Corrupted lease file %s.\n", e->d_name);
+            continue;
+        }
+
+        if(lease_end + LEASE_PURGE_TIME < now.tv_sec) {
+            /* Take a lock */
+            fd = open_lease_file(buf);
+            if(fd < 0)
+                continue;
+            rc = read_lease_file(fd, NULL, &lease_end, NULL, client_buf, 700);
+            if(rc >= 0) {
+                /* Check for race */
+                if(lease_end + LEASE_PURGE_TIME < now.tv_sec)
+                    unlink(buf);
+            }
+            close_lease_file(buf, fd);
             continue;
         }
 
