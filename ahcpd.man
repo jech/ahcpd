@@ -49,14 +49,40 @@ Use the given configuration script instead of
 Set the debug level to
 .I level
 (default 1).
+.TP
+.BI \-i " filename"
+Specify the filename containing this host's unique id.  The default is
+.BR /var/lib/ahcp-unique-id .
+.TP
+.B \-s
+Do not perform stateful autoconfiguration; the autoconfiguration
+process will be finished after stateless autoconfiguration is done.
+.TP
+.BI \-S " first last dir"
+Perform the duties of a stateful AHCP server.
+.I First
+and
+.I last
+represent the bounds of the range of IPv4 addresses available; active
+leases will be stored in the directory
+.IR dir .
 .SH FILES
 .TP
 .B /etc/ahcp/ahcp\-local.sh
 Script that will be called after IP addresses and routing are
-configured or unconfigured.  It will be passed one argument, either
+configured or unconfigured.  It will be passed one argument, which is
+either
 .B start
 or
-.BR stop .
+.B stop
+during stateless autoconfiguration, and
+.B start\-ipv4
+or
+.B stop-ipv4
+during stateful autoconfiguration.
+.TP
+.B /var/lib/ahcp-unique-id
+Default location of the file containing this host's unique-id.
 .TP
 .B /etc/ahcp/ahcp\-olsrd.conf
 Additional configuration for the
