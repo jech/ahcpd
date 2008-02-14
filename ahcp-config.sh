@@ -36,6 +36,8 @@ if [ -z "$interfaces" ]; then die "No interface set"; fi
 first_if="$(echo $interfaces | sed 's/ .*//')"
 other_if="$(echo $interfaces | sed 's/[^ ]*//')"
 
+ipv4_address="$AHCP_IPv4_ADDRESS"
+
 platform=`uname`
 
 if [ "$platform" = "Darwin" ]
@@ -87,6 +89,18 @@ add_addresses() {
 del_addresses() {
     for i in $interfaces; do
         del_address $i
+    done
+}
+
+add_ipv4_addresses() {
+    for i in $interfaces; do
+        ip addr add $ipv4_address/32 dev $i
+    done
+}
+
+del_ipv4_addresses() {
+    for i in $interfaces; do
+        ip addr del $ipv4_address/32 dev $i
     done
 }
 
@@ -189,9 +203,12 @@ stop_olsr() {
 }
 
 start_babel() {
+    full=${1:-true}
+
     multicast="${AHCP_BABEL_MULTICAST_ADDRESS:+-m $AHCP_BABEL_MULTICAST_ADDRESS}"
     port="${AHCP_BABEL_PORT_NUMBER:+-p $AHCP_BABEL_PORT_NUMBER}"
     hello="${AHCP_BABEL_HELLO_INTERVAL:+-h $(expr $AHCP_BABEL_HELLO_INTERVAL / 100)}"
+    ipv4_exports="${ipv4_address:+-X $ipv4_address 0}"
 
     if [ -r /etc/ahcp/ahcp-babel-options ] ; then
         options="$(cat /etc/ahcp/ahcp-babel-options)"
@@ -201,10 +218,12 @@ start_babel() {
         more_interfaces="$(cat /etc/ahcp/ahcp-babel-interfaces)"
     fi
 
-    # Babel can work with unnumbered links, so only number the first one
-    first_addr="$(if_address $first_if)"
-    add_address $first_if $first_addr
-    nameserver_start
+    if $full; then
+        # Babel can work with unnumbered links, so only number the first one
+        first_addr="$(if_address $first_if)"
+        add_address $first_if $first_addr
+        nameserver_start
+    fi
 
     if [ $debuglevel -le 2 ] ; then
         babel_debuglevel=0
@@ -212,16 +231,22 @@ start_babel() {
         babel_debuglevel="$(expr $debuglevel - 2)"
     fi
 
-    babel -d $babel_debuglevel $multicast $port $hello $options -X $first_addr 0 $first_addr $interfaces $more_interfaces &
+    babel -d $babel_debuglevel $multicast $port $hello $options \
+          -X $first_addr $ipv4_exports 0 $first_addr \
+          $interfaces $more_interfaces &
     echo $! > $babel_pidfile
 }
 
 stop_babel() {
+    full=${1:-true}
+
     kill $(cat "$babel_pidfile")
     rm "$babel_pidfile"
 
-    del_address $first_if
-    nameserver_stop
+    if $full; then
+        del_address $first_if
+        nameserver_stop
+    fi
 }
 
 case $1 in
@@ -239,6 +264,17 @@ case $1 in
             [Bb]abel) stop_babel;;
             *) die "Unknown routing protocol $AHCP_ROUTING_PROTOCOL";;
         esac;;
+    start-ipv4)
+        case ${AHCP_ROUTING_PROTOCOL:-static} in
+            [Bb]abel)
+                stop_babel false
+                add_ipv4_addresses
+                start_babel false
+                ;;
+            *) add_ipv4_addresses ;;
+        esac;;
+    stop-ipv4)
+        del_ipv4_addresses ;;
 esac
 
 if [ -x /etc/ahcp/ahcp-local.sh ]; then
