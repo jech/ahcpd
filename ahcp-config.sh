@@ -57,9 +57,13 @@ then
 	ifconfig "$1" inet6 "${2:-$(if_address $1)}$3" delete
     }
 
-    add_ipv4_addresses() { echo "IPv4 not implemented under Darwin" >&2 }
+    add_ipv4_addresses() {
+        echo "IPv4 not implemented under Darwin" >&2
+    }
 
-    del_ipv4_addresses() { :; }
+    del_ipv4_addresses() {
+        :
+    }
 
 else
 
@@ -221,9 +225,10 @@ start_babel() {
         more_interfaces="$(cat /etc/ahcp/ahcp-babel-interfaces)"
     fi
 
+    first_addr="$(if_address $first_if)"
+
     if $full; then
         # Babel can work with unnumbered links, so only number the first one
-        first_addr="$(if_address $first_if)"
         add_address $first_if $first_addr
         nameserver_start
     fi
@@ -235,7 +240,7 @@ start_babel() {
     fi
 
     babel -d $babel_debuglevel $multicast $port $hello $options \
-          -X $first_addr $ipv4_exports 0 $first_addr \
+          -X $first_addr 0 $ipv4_exports $first_addr \
           $interfaces $more_interfaces &
     echo $! > $babel_pidfile
 }
