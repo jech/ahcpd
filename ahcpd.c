@@ -819,7 +819,7 @@ main(int argc, char **argv)
             "Syntax: ahcpd "
             "[-m group] [-p port] [-a authority_file] [-e expires] [-n] [-N]\n"
             "              "
-            "[-c script] interface...\n");
+            "[-i file] [-c script] [-s] [-S first last dir] interface...\n");
     exit(1);
 }
 
