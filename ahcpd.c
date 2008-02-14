@@ -175,6 +175,11 @@ main(int argc, char **argv)
             if(i >= argc) goto usage;
             debug_level = atoi(argv[i]);
             i++;
+        } else if(strcmp(argv[i], "-i") == 0) {
+            i++;
+            if(i >= argc) goto usage;
+            client_id_file = argv[i];
+            i++;
 #ifndef NO_STATEFUL_SERVER
         } else if(strcmp(argv[i], "-S") == 0) {
             unsigned char ipv4[4];
