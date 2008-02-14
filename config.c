@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2007 by Juliusz Chroboczek
+Copyright (c) 2007, 2008 by Juliusz Chroboczek
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -38,9 +38,20 @@ THE SOFTWARE.
 int data_len = -1;
 
 unsigned char *config_data = NULL;
+unsigned char *stateful_servers = NULL;
+unsigned int stateful_servers_len = 0;
+
+unsigned char ipv4_address[4];
+
+#define DO_NOTHING 0
+#define DO_START 1
+#define DO_STOP 2
+#define DO_START_IPv4 3
+#define DO_STOP_IPv4 4
 
 static int
-parse_data(const unsigned char *data, int len, int start, char **interfaces);
+doit(const unsigned char *data, int len, unsigned char *ipv4,
+     int what, char **interfaces);
 static char *parse_address_list(const unsigned char *data, int len);
 
 int
@@ -67,12 +78,14 @@ accept_data(unsigned char *data, int len, char **interfaces, int dummy)
     if(!data_changed(data, len))
             return 0;
 
-    rc = parse_data(data, len, -1, interfaces);
+    unaccept_stateful_data(interfaces);
+
+    rc = doit(data, len, NULL, DO_NOTHING, interfaces);
     if(rc < 0)
         return -1;
 
     if(config_data && !dummy) {
-        rc = parse_data(config_data, data_len, 0, interfaces);
+        rc = doit(config_data, data_len, NULL, DO_STOP, interfaces);
         if(rc < 0) {
             fprintf(stderr, "Ack!  Couldn't unconfigure!\n");
             exit(1);
@@ -91,7 +104,7 @@ accept_data(unsigned char *data, int len, char **interfaces, int dummy)
     data_len = len;
 
     if(!dummy) {
-        rc = parse_data(config_data, data_len, 1, interfaces);
+        rc = doit(config_data, data_len, NULL, DO_START, interfaces);
         if(rc < 0) {
             fprintf(stderr, "Ack!  Couldn't configure.\n");
             free(config_data);
@@ -110,7 +123,8 @@ unaccept_data(char **interfaces, int dummy)
     int rc;
 
     if(!dummy) {
-        rc = parse_data(config_data, data_len, 0, interfaces);
+        unaccept_stateful_data(interfaces);
+        rc = doit(config_data, data_len, NULL, DO_STOP, interfaces);
         if(rc < 0) {
             fprintf(stderr, "Ack!  Couldn't unconfigure!\n");
             exit(1);
@@ -122,12 +136,12 @@ unaccept_data(char **interfaces, int dummy)
     return 1;
 }
 
-/* Parse a chunk of configuration data.  When parsing is successful,
-   configure if start is 1, unconfigure if start is 0, do nothing if
-   start is -1. */
+static char *script_actions[] =
+    { "???", "start", "stop", "start-ipv4", "stop-ipv4" };
 
 static int
-parse_data(const unsigned char *data, int len, int start, char **interfaces)
+doit(const unsigned char *data, int len, unsigned char *ipv4,
+     int what, char **interfaces)
 {
     int i, opt, olen;
     int mandatory = 0;
@@ -179,7 +193,7 @@ parse_data(const unsigned char *data, int len, int start, char **interfaces)
             char *value;
             if(olen % 16 != 0) {
                 fprintf(stderr, "Unexpected length for %s.\n",
-                        opt == OPT_IPv6_PREFIX ? "prefix" : "name server");
+                        opt == OPT_IPv6_PREFIX ? "prefix" : "server");
                 return -1;
             }
             value = parse_address_list(data + i + 2, olen);
@@ -297,6 +311,18 @@ parse_data(const unsigned char *data, int len, int start, char **interfaces)
                 omandatory = 0;
                 j += oolen + 2;
             }
+        } else if(opt == OPT_AHCP_STATEFUL_SERVER) {
+            if(olen % 16 != 0) {
+                fprintf(stderr, "Unexpected length for stateful server.\n");
+                return -1;
+            }
+            if(what == DO_START) {
+                stateful_servers = malloc(olen);
+                if(stateful_servers == NULL)
+                    return -1;
+                memcpy(stateful_servers, data + i + 2, olen);
+                stateful_servers_len = olen;
+            }
         } else {
             if(mandatory || debug_level >= 1)
                 fprintf(stderr, "Unsupported option %d\n", opt);
@@ -306,8 +332,15 @@ parse_data(const unsigned char *data, int len, int start, char **interfaces)
         i += olen + 2;
     }
 
-    if(start < 0 || config_script[0] == '\0')
-        return 1;
+    if(what == DO_NOTHING || config_script[0] == '\0')
+        goto success;
+
+    if(what == DO_STOP) {
+        if(stateful_servers)
+            free(stateful_servers);
+        stateful_servers = NULL;
+        stateful_servers_len = 0;
+    }
 
     pid = fork();
     if(pid < 0) {
@@ -315,7 +348,6 @@ parse_data(const unsigned char *data, int len, int start, char **interfaces)
         return 0;
     } else if(pid == 0) {
         char buf[200];
-        char *action;
         int i;
         snprintf(buf, 50, "%lu", (unsigned long)getppid());
         setenv("AHCP_DAEMON_PID", buf, 1);
@@ -354,25 +386,27 @@ parse_data(const unsigned char *data, int len, int start, char **interfaces)
         }
         if(prefix) {
             setenv("AHCP_PREFIX", prefix, 1);
-            free(prefix);
         }
         if(nameserver) {
             if(!nodns)
                 setenv("AHCP_NAMESERVER", nameserver, 1);
-            free(nameserver);
         }
         if(ntp_server) {
             setenv("AHCP_NTP_SERVER", ntp_server, 1);
-            free(ntp_server);
         }
-        switch(start) {
-        case 0: action = "stop"; break;
-        case 1: action = "start"; break;
-        default: abort();
+        if(ipv4) {
+            char buf[100];
+            const char *p;
+            p = inet_ntop(AF_INET, ipv4, buf, 100);
+            if(p == NULL)
+                return -1;
+            setenv("AHCP_IPv4_ADDRESS", buf, 1);
         }
+
         if(debug_level >= 1)
-            printf("Running ``%s %s''\n", config_script, action);
-        execl(config_script, config_script, action, NULL);
+            printf("Running ``%s %s''\n", config_script,
+                   script_actions[what]);
+        execl(config_script, config_script, script_actions[what], NULL);
         perror("exec failed");
         exit(42);
     } else {
@@ -393,6 +427,11 @@ parse_data(const unsigned char *data, int len, int start, char **interfaces)
             return -1;
         }
     }
+
+ success:
+    if(prefix) free(prefix);
+    if(nameserver) free(nameserver);
+    if(ntp_server) free(ntp_server);
     return 1;
 }
 
@@ -441,3 +480,88 @@ parse_address_list(const unsigned char *data, int len)
     }
     return result;
 }
+
+int
+accept_stateful_data(unsigned char *data, int len, unsigned short lease_time,
+                     char **interfaces)
+{
+    const unsigned char z[4] = {0, 0, 0, 0};
+    unsigned char ipv4[4] = {0, 0, 0, 0};
+
+    int i, rc, opt, olen, mandatory = 0;
+
+    if(!config_data) {
+        fprintf(stderr, "Attempted to configure IPv4 while unconfigured.\n");
+        return -1;
+    }
+
+    i = 0;
+    while(i < len) {
+        opt = data[i];
+        if(opt == OPT_PAD) {
+            mandatory = 0;
+            i++;
+            continue;
+        } else if(opt == OPT_MANDATORY) {
+            mandatory = 1;
+            i++;
+            continue;
+        }
+
+        olen = data[i + 1];
+        if(olen + 2 + i > len) {
+            fprintf(stderr, "Truncated message.\n");
+            return -1;
+        }
+        if(opt == OPT_IPv4_ADDRESS) {
+            if(olen < 4 || olen % 4 != 0)
+                return -1;
+            memcpy(ipv4, data + i + 2, 4);
+        } else {
+            if(mandatory) return -1;
+        }
+        mandatory = 0;
+        i += olen + 2;
+    }
+
+    if(memcmp(ipv4, z, 4) == 0)
+        return -1;
+
+    if(memcmp(ipv4_address, z, 4) == 0) {
+        rc = doit(config_data, data_len, ipv4, DO_START_IPv4, interfaces);
+        if(rc < 0)
+            return -1;
+        memcpy(ipv4_address, ipv4, 4);
+        return 1;
+    } else if(memcmp(ipv4_address, ipv4, 4) != 0) {
+        return -1;
+    } else {
+        return 0;
+    }
+}
+
+int
+unaccept_stateful_data(char **interfaces)
+{
+    const unsigned char z[4] = {0, 0, 0, 0};
+    int rc;
+
+    if(memcmp(ipv4_address, z, 4) == 0) {
+        return 0;
+    } else {
+        if(!config_data) {
+            fprintf(stderr,
+                    "Attempted to unconfigure IPv4 while unconfigured.\n");
+            return -1;
+        }
+
+        rc = doit(config_data, data_len, ipv4_address,
+                  DO_STOP_IPv4, interfaces);
+        if(rc < 0)
+            return -1;
+        memcpy(ipv4_address, z, 4);
+        return 1;
+    }
+}
+
+

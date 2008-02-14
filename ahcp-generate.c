@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2006-2007 by Juliusz Chroboczek
+Copyright (c) 2006-2008 by Juliusz Chroboczek
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -50,6 +50,7 @@ unsigned char routing_protocol = ROUTING_PROTOCOL_BABEL;
 char *default_gateway = NULL;
 char *name_server = NULL;
 char *ntp_server = NULL;
+char *stateful_server = NULL;
 unsigned char olsr_multicast_address[16] =
     { 0xff, 0x04, 0, 0, 0, 0, 0, 0,
       0xcc, 0xa6, 0xc0, 0xf9, 0xe1, 0x82, 0x53, 0x59 };
@@ -76,12 +77,12 @@ main(int argc, char **argv)
         "ahcp-generate "
         "-p prefix [-P protocol] [-g gw] [-n name-server] [-N ntp-server]\n"
         "              "
-        "[-e seconds] > ahcp.dat";
+        "[-s stateful-server] [-e seconds] > ahcp.dat";
     int rc;
 
     while(1) {
         int c;
-        c = getopt(argc, argv, "p:n:N:g:P:e:");
+        c = getopt(argc, argv, "p:n:N:g:P:s:e:");
         if(c < 0) break;
         switch(c) {
         case 'p': prefix = optarg; break;
@@ -100,6 +101,7 @@ main(int argc, char **argv)
                 exit(1);
             }
             break;
+        case 's': stateful_server = optarg; break;
         case 'e': expires_delta = atoi(optarg); break;
         default: fprintf(stderr, "%s\n", usage); exit(1); break;
         }
@@ -232,6 +234,18 @@ main(int argc, char **argv)
             exit(1);
         }
         EMIT1(OPT_NTP_SERVER);
+        EMIT1(16);
+        EMIT(n, 16);
+    }
+
+    if(ntp_server) {
+        unsigned char n[16];
+        rc = inet_pton(AF_INET6, stateful_server, n);
+        if(rc < 0) {
+            fprintf(stderr, "Couldn't parse stateful server.\n");
+            exit(1);
+        }
+        EMIT1(OPT_AHCP_STATEFUL_SERVER);
         EMIT1(16);
         EMIT(n, 16);
     }

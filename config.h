@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2007 by Juliusz Chroboczek
+Copyright (c) 2007, 2008 by Juliusz Chroboczek
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,13 @@ THE SOFTWARE.
 
 extern unsigned char *config_data;
 extern int data_len;
+extern unsigned char *stateful_servers;
+extern unsigned int stateful_servers_len;
 
 int data_changed(unsigned char *data, int len);
 int accept_data(unsigned char *data, int len, char **interfaces, int dummy);
 int unaccept_data(char **interfaces, int dummy);
+
+int accept_stateful_data(unsigned char *data, int len,
+                         unsigned short lease_time, char **interfaces);
+int unaccept_stateful_data(char **interfaces);

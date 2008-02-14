@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2007 by Juliusz Chroboczek
+Copyright (c) 2007, 2008 by Juliusz Chroboczek
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -39,9 +39,12 @@ THE SOFTWARE.
 #include "ahcpd.h"
 #include "config.h"
 #include "constants.h"
+#include "lease.h"
 
 #define QUERY 0
 #define REPLY 1
+#define STATEFUL_REQUEST 2
+#define STATEFUL_EXPIRE 3
 
 #define BUFFER_SIZE 1500
 
@@ -49,9 +52,10 @@ struct timeval now;
 const struct timeval zero = {0, 0};
 
 static volatile sig_atomic_t exiting = 0;
+unsigned char unique_id[16];
 unsigned char buf[BUFFER_SIZE];
 unsigned int data_origin = 0, data_expires = 0, data_age_origin = 0;
-int nodns = 0;
+int nodns = 0, nostate = 0;
 char *config_script = "/usr/local/bin/ahcp-config.sh";
 int debug_level = 1;
 
@@ -66,6 +70,8 @@ struct network {
 struct network networks[MAXNETWORKS];
 int numnetworks;
 char *interfaces[MAXNETWORKS + 1];
+struct timeval stateful_request_time = {0, 0};
+struct timeval stateful_expire_time = {0, 0};
 
 static void init_signals(void);
 static void set_timeout(int i, int which,
@@ -101,6 +107,8 @@ valid(int nowsecs, int origin, int expires, int age)
 
 #define INITIAL_QUERY_TIMEOUT 2000
 #define MAX_QUERY_TIMEOUT 30000
+#define INITIAL_STATEFUL_REQUEST_TIMEOUT 2000
+#define MAX_STATEFUL_REQUEST_TIMEOUT 60000
 
 int
 main(int argc, char **argv)
@@ -116,6 +124,7 @@ main(int argc, char **argv)
     int dummy = 0;
     int expires_delay = 3600;
     int query_timeout = INITIAL_QUERY_TIMEOUT;
+    int stateful_request_timeout = 1000;
 
     i = 1;
     while(i < argc && argv[i][0] == '-') {
@@ -151,6 +160,9 @@ main(int argc, char **argv)
             i++;
         } else if(strcmp(argv[i], "-N") == 0) {
             nodns = 1;
+            i++;
+        } else if(strcmp(argv[i], "-s") == 0) {
+            nostate = 1;
             i++;
         } else if(strcmp(argv[i], "-c") == 0) {
             i++;
@@ -224,6 +236,11 @@ main(int argc, char **argv)
         perror("open(random)");
         seed = now.tv_sec ^ now.tv_usec;
     } else {
+        rc = read(fd, unique_id, 16);
+        if(rc < 16) {
+            perror("read(random)");
+            exit(1);
+        }
         rc = read(fd, &seed, sizeof(unsigned int));
         if(rc < sizeof(unsigned int)) {
             perror("read(random)");
@@ -273,6 +290,9 @@ main(int argc, char **argv)
             timeval_min(&tv, &networks[i].query_time);
             timeval_min(&tv, &networks[i].reply_time);
         }
+        timeval_min(&tv, &stateful_request_time);
+        timeval_min(&tv, &stateful_expire_time);
+
         if(!authority && data_age_origin > 0) {
             int data_age = now.tv_sec - data_age_origin;
             int valid_for =
@@ -320,13 +340,17 @@ main(int argc, char **argv)
                 }
                 continue;
             }
-            for(i = 0; i < numnetworks; i++) {
-                if(networks[i].ifindex == sin6.sin6_scope_id)
-                    break;
-            }
-            if(i >= numnetworks) {
-                fprintf(stderr, "Received packet on unknown network.\n");
-                continue;
+            if(IN6_IS_ADDR_LINKLOCAL(&sin6.sin6_addr)) {
+                for(i = 0; i < numnetworks; i++) {
+                    if(networks[i].ifindex == sin6.sin6_scope_id)
+                        break;
+                }
+                if(i >= numnetworks) {
+                    fprintf(stderr, "Received packet on unknown network.\n");
+                    continue;
+                }
+            } else {
+                i = -1;
             }
 
             if(rc < 4) {
@@ -345,7 +369,14 @@ main(int argc, char **argv)
             }
 
             if(buf[2] == AHCP_QUERY) {
-                /* Query */
+                if(i < 0) {
+                    fprintf(stderr, "Received non-local query.\n");
+                    continue;
+                }
+                if(i < 0) {
+                    fprintf(stderr, "Received non-local query.\n");
+                    continue;
+                }
                 if(debug_level >= 2)
                     printf("Received AHCP query.\n");
                 /* Since peers use an initial timeout of 2 seconds,
@@ -354,6 +385,10 @@ main(int argc, char **argv)
                     set_timeout(i, REPLY, 1000, 0);
             } else if(buf[2] == AHCP_REPLY) {
                 /* Reply */
+                if(i < 0) {
+                    fprintf(stderr, "Received non-local reply.\n");
+                    continue;
+                }
                 unsigned int origin, expires;
                 unsigned short age, len;
                 if(rc < 16) {
@@ -441,7 +476,109 @@ main(int argc, char **argv)
                             /* Different from what we had, flood it further */
                             set_timeout(-1, REPLY, 3000, 0);
                         }
+                        if(!nostate && stateful_servers_len >= 16) {
+                            set_timeout(-1, STATEFUL_REQUEST, 8 * 1000, 1);
+                            stateful_request_timeout = 2000;
+                        } else {
+                            set_timeout(-1, STATEFUL_REQUEST, -1, 1);
+                        }
                     }
+                }
+            } else if(buf[2] == AHCP_STATEFUL_REQUEST) {
+                unsigned short lease_time;
+                unsigned short uid_len;
+                unsigned char ipv4[4];
+
+                if(rc < 8)
+                    continue;
+
+                memcpy(&lease_time, buf + 4, 2);
+                lease_time = ntohs(lease_time);
+                memcpy(&uid_len, buf + 6, 2);
+                uid_len = ntohs(uid_len);
+                if(rc < 8 + uid_len)
+                    continue;
+                if(uid_len > 500)
+                    continue;
+
+                rc = make_lease(buf + 8, uid_len, ipv4, &lease_time);
+
+                buf[0] = 43;
+                buf[1] = 0;
+                if(rc < 0) {
+                    buf[2] = AHCP_STATEFUL_NAK;
+                    buf[3] = 0;
+                    buf[4] = 0;
+                    buf[5] = 0;
+                    ahcp_send(s, buf, 8 + uid_len,
+                              (struct sockaddr*)&sin6, sizeof(sin6));
+                } else {
+                    const unsigned short six = htons(6);
+                    int i;
+                    lease_time = htons(lease_time);
+                    buf[2] = AHCP_STATEFUL_ACK;
+                    buf[3] = 0;
+                    memcpy(buf + 4, &lease_time, 2);
+                    i = 8 + uid_len;
+                    memcpy(buf + i, &six, 2);
+                    i += 2;
+                    buf[i++] = OPT_IPv4_ADDRESS;
+                    buf[i++] = 4;
+                    memcpy(buf + i, ipv4, 4);
+                    i += 4;
+                    ahcp_send(s, buf, i,
+                              (struct sockaddr*)&sin6, sizeof(sin6));
+                }
+            } else if(buf[2] == AHCP_STATEFUL_ACK ||
+                      buf[2] == AHCP_STATEFUL_NAK) {
+                unsigned short sixteen = htons(16);
+                if(rc < 24) {
+                    fprintf(stderr, "Truncated AHCP packet.\n");
+                    continue;
+                }
+                if(nostate || stateful_servers_len < 16 ||
+                   memcmp(stateful_servers, &sin6.sin6_addr, 16) != 0) {
+                    fprintf(stderr, "Received unexpected stateful reply.\n");
+                    continue;
+                }
+                if(memcmp(buf + 6, &sixteen, 2) != 0 ||
+                   memcmp(buf + 8, unique_id, 16) != 0) {
+                    fprintf(stderr, "Received stateful reply not for me.\n");
+                    continue;
+                }
+
+                if(debug_level >= 2)
+                    printf("Received stateful %s.\n",
+                           buf[2] == AHCP_STATEFUL_ACK ? "ACK" : "NAK");
+
+                if(buf[2] == AHCP_STATEFUL_ACK) {
+                    unsigned short len, lease_time;
+                    if(rc < 26) {
+                        fprintf(stderr, "Truncated AHCP packet.\n");
+                        continue;
+                    }
+                    memcpy(&lease_time, buf + 4, 2);
+                    lease_time = ntohs(lease_time);
+                    if(lease_time < 4)
+                        continue;
+                    memcpy(&len, buf + 24, 2);
+                    len = ntohs(len);
+                    if(rc < len + 26) {
+                        fprintf(stderr, "Truncated AHCP packet.\n");
+                        continue;
+                    }
+                    rc = accept_stateful_data(buf + 26, len, lease_time,
+                                              interfaces);
+                    if(rc >= 0) {
+                        set_timeout(-1, STATEFUL_EXPIRE, lease_time * 1000, 1);
+                        set_timeout(-1, STATEFUL_REQUEST,
+                                    MIN(lease_time * 2000 / 3, 60 * 60 * 1000),
+                                    1);
+                        stateful_request_timeout = 2000;
+                    }
+                } else {
+                    set_timeout(-1, STATEFUL_REQUEST, 60 * 1000, 1);
+                    stateful_request_timeout = MAX_STATEFUL_REQUEST_TIMEOUT;
                 }
             } else {
                 fprintf(stderr, "Unknown message type %d\n", buf[2]);
@@ -460,6 +597,7 @@ main(int argc, char **argv)
                 data_expires = data_origin = data_age_origin = 0;
                 query_timeout = INITIAL_QUERY_TIMEOUT;
                 set_timeout(-1, QUERY, query_timeout, 0);
+                set_timeout(-1, STATEFUL_REQUEST, -1, 1);
             } else if(valid_for <= 50) {
                 /* Our data is going to expire soon */
                 if(debug_level >= 2)
@@ -545,6 +683,45 @@ main(int argc, char **argv)
                 }
             }
         }
+
+        if(stateful_request_time.tv_sec > 0 &&
+           timeval_compare(&stateful_request_time, &now) <= 0) {
+            unsigned short lease_time = htons(30 * 60);
+            unsigned short sixteen = htons(16);
+            if(stateful_servers_len < 16) {
+                fprintf(stderr,
+                        "Trying to send stateful query with no servers.\n");
+                continue;
+            }
+
+            buf[0] = 43;
+            buf[1] = 0;
+            buf[2] = AHCP_STATEFUL_REQUEST;
+            buf[3] = 0;
+            memcpy(buf + 4, &lease_time, 2);
+            memcpy(buf + 6, &sixteen, 2);
+            memcpy(buf + 8, unique_id, 16);
+
+            memset(&sin6, 0, sizeof(sin6));
+            sin6.sin6_family = AF_INET6;
+            memcpy(&sin6.sin6_addr, stateful_servers, 16);
+            sin6.sin6_port = htons(port);
+            if(debug_level >= 2)
+                printf("Sending stateful request.\n");
+            rc = ahcp_send(s, buf, 24,
+                           (struct sockaddr*)&sin6, sizeof(sin6));
+            if(rc < 0)
+                perror("ahcp_send");
+            stateful_request_timeout = MIN(2 * stateful_request_timeout,
+                                           MAX_STATEFUL_REQUEST_TIMEOUT);
+            set_timeout(-1, STATEFUL_REQUEST, stateful_request_timeout, 1);
+        }
+
+        if(stateful_expire_time.tv_sec > 0 &&
+           timeval_compare(&stateful_expire_time, &now) <= 0) {
+            unaccept_stateful_data(interfaces);
+            set_timeout(-1, STATEFUL_REQUEST, -1, 1);
+        }
     }
     if(config_data) {
         rc = unaccept_data(interfaces, dummy);
@@ -567,7 +744,7 @@ main(int argc, char **argv)
 static void
 set_timeout(int net, int which, int msecs, int override)
 {
-    if(net < 0) {
+    if(net < 0 && which != STATEFUL_REQUEST && which != STATEFUL_EXPIRE) {
         int i;
         for(i = 0; i < numnetworks; i++)
             set_timeout(i, which, msecs, override);
@@ -576,8 +753,15 @@ set_timeout(int net, int which, int msecs, int override)
         int ms = msecs / 2 + random() % msecs;
         if(which == QUERY)
             tv = &networks[net].query_time;
-        else
+        else if(which == REPLY)
             tv = &networks[net].reply_time;
+        else if(which == STATEFUL_REQUEST)
+            tv = &stateful_request_time;
+        else if(which == STATEFUL_EXPIRE)
+            tv = &stateful_expire_time;
+        else
+            abort();
+
         /* (0, 0) represents never */
         if(override || tv->tv_sec == 0 || tv->tv_sec > now.tv_sec + ms / 1000) {
             if(msecs < 0) {

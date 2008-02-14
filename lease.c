@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2006-2008 by Juliusz Chroboczek
+Copyright (c) 2008 by Juliusz Chroboczek
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,44 +20,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-#define AHCP_QUERY 0
-#define AHCP_REPLY 1
-#define AHCP_STATEFUL_REQUEST 2
-#define AHCP_STATEFUL_RELEASE 3
-#define AHCP_STATEFUL_ACK 4
-#define AHCP_STATEFUL_NAK 5
+#include <string.h>
 
-#define OPT_PAD 0
-#define OPT_MANDATORY 1
-#define OPT_EXPIRES 2
-#define OPT_IPv6_PREFIX 3
-#define OPT_ROUTING_PROTOCOL 4
-#define OPT_NAME_SERVER 5
-#define OPT_NTP_SERVER 6
-#define OPT_AHCP_STATEFUL_SERVER 7
-#define OPT_IPv4_ADDRESS 8
+#include "ahcpd.h"
+#include "lease.h"
 
-#define ROUTING_PROTOCOL_STATIC 0
-#define ROUTING_PROTOCOL_OLSR 1
-#define ROUTING_PROTOCOL_BABEL 2
-
-/* STATIC options */
-#define STATIC_DEFAULT_GATEWAY 2
-
-/* OLSR options */
-#define OLSR_MULTICAST_ADDRESS 2
-#define OLSR_HELLO_INTERVAL 3
-#define OLSR_HELLO_VALIDITY 4
-#define OLSR_TC_INTERVAL 5
-#define OLSR_TC_VALIDITY 6
-#define OLSR_MID_INTERVAL 7
-#define OLSR_MID_VALIDITY 8
-#define OLSR_HNA_INTERVAL 9
-#define OLSR_HNA_VALIDITY 10
-#define OLSR_LINK_QUALITY 11
-
-/* Babel options */
-
-#define BABEL_MULTICAST_ADDRESS 2
-#define BABEL_PORT_NUMBER 3
-#define BABEL_HELLO_INTERVAL 4
+int
+make_lease(unsigned char *buf, int len,
+           unsigned char *ipv4_return, unsigned short *lease_time)
+{
+    return -1;
+}
