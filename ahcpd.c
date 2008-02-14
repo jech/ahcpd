@@ -553,14 +553,17 @@ main(int argc, char **argv)
                         }
                     }
                 }
-            } else if(buf[2] == AHCP_STATEFUL_REQUEST) {
+            } else if(buf[2] == AHCP_STATEFUL_REQUEST ||
+                      buf[2] == AHCP_STATEFUL_RELEASE) {
                 unsigned short lease_time;
                 unsigned short uid_len, len;
                 unsigned char suggested_ipv4[4] = {0, 0, 0, 0};
                 unsigned char ipv4[4];
 
                 if(debug_level >= 2)
-                    printf("Received stateful request.\n");
+                    printf("Received stateful %s.\n",
+                           buf[2] == AHCP_STATEFUL_REQUEST ?
+                           "request" : "release");
 
                 if(time_broken(now.tv_sec))
                     continue;
@@ -582,37 +585,42 @@ main(int argc, char **argv)
                     continue;
                 parse_stateful_data(buf + 8 + uid_len + 2, len,
                                     suggested_ipv4);
-                rc = take_lease(buf + 8, uid_len,
-                                suggested_ipv4[0] == 0 ? NULL : suggested_ipv4,
-                                ipv4, &lease_time);
+                if(buf[2] == AHCP_STATEFUL_REQUEST) {
+                    rc = take_lease(buf + 8, uid_len,
+                                    suggested_ipv4[0] == 0 ?
+                                    NULL : suggested_ipv4,
+                                    ipv4, &lease_time);
 
-                buf[0] = 43;
-                buf[1] = 0;
-                if(rc < 0) {
-                    if(debug_level >= 2)
-                        printf("Sending stateful NAK.\n");
-                    buf[2] = AHCP_STATEFUL_NAK;
-                    buf[3] = 0;
-                    buf[4] = 0;
-                    buf[5] = 0;
-                    ahcp_send(s, buf, 8 + uid_len,
-                              (struct sockaddr*)&sin6, sizeof(sin6));
+                    buf[0] = 43;
+                    buf[1] = 0;
+                    if(rc < 0) {
+                        if(debug_level >= 2)
+                            printf("Sending stateful NAK.\n");
+                        buf[2] = AHCP_STATEFUL_NAK;
+                        buf[3] = 0;
+                        buf[4] = 0;
+                        buf[5] = 0;
+                        ahcp_send(s, buf, 8 + uid_len,
+                                  (struct sockaddr*)&sin6, sizeof(sin6));
+                    } else {
+                        int i;
+                        if(debug_level >= 2)
+                            printf("Sending stateful ACK.\n");
+                        lease_time = htons(lease_time);
+                        buf[2] = AHCP_STATEFUL_ACK;
+                        buf[3] = 0;
+                        memcpy(buf + 4, &lease_time, 2);
+                        i = 8 + uid_len;
+                        i += build_stateful_data(buf + i, ipv4);
+                        ahcp_send(s, buf, i,
+                                  (struct sockaddr*)&sin6, sizeof(sin6));
+                    }
                 } else {
-                    int i;
-                    if(debug_level >= 2)
-                        printf("Sending stateful ACK.\n");
-                    lease_time = htons(lease_time);
-                    buf[2] = AHCP_STATEFUL_ACK;
-                    buf[3] = 0;
-                    memcpy(buf + 4, &lease_time, 2);
-                    i = 8 + uid_len;
-                    i += build_stateful_data(buf + i, ipv4);
-                    ahcp_send(s, buf, i,
-                              (struct sockaddr*)&sin6, sizeof(sin6));
+                    /* Release */
+                    release_lease(suggested_ipv4[0] == 0 ?
+                                  NULL : suggested_ipv4,
+                                  buf + 8, uid_len);
                 }
-            } else if(buf[2] == AHCP_STATEFUL_RELEASE) {
-                if(debug_level >= 2)
-                    printf("Received stateful release.\n");
             } else if(buf[2] == AHCP_STATEFUL_ACK ||
                       buf[2] == AHCP_STATEFUL_NAK) {
                 unsigned short sixteen = htons(16);
