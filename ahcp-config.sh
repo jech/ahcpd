@@ -277,6 +277,7 @@ case $1 in
             [Bb]abel)
                 stop_babel false
                 add_ipv4_addresses
+                sleep 2
                 start_babel false
                 ;;
             *) add_ipv4_addresses ;;
