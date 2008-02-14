@@ -303,7 +303,7 @@ read_lease_file(int fd, const unsigned char *ipv4,
     if(client_buf) {
         if(len < rc - 16)
             return -1;
-        memcpy(client_buf, buf + 8, rc - 8);
+        memcpy(client_buf, buf + 16, rc - 16);
     }
     if(lease_end_return)
         *lease_end_return = lease_end;
