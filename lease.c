@@ -148,6 +148,8 @@ add_hint(const unsigned char *id, int id_len, unsigned int address)
     hint->id = malloc(id_len);
     if(hint->id == NULL)
         return;
+    memcpy(hint->id, id, id_len);
+    hint->id_len = id_len;
     hint->address = address;
     return;
 }
