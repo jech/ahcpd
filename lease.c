@@ -542,10 +542,8 @@ release_lease(const unsigned char *ipv4,
     }
 
     if(client_id) {
-        if(rc != client_id_len || memcmp(buf, client_id, rc) != 0) {
-            fprintf(stderr, "Client id mismatch.\n");
+        if(rc != client_id_len || memcmp(buf, client_id, rc) != 0)
             goto fail;
-        }
     }
 
     gettimeofday(&now, NULL);
