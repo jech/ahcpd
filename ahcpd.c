@@ -814,6 +814,29 @@ main(int argc, char **argv)
         }
     }
     if(config_data) {
+        if(ipv4_address[0] != 0) {
+            unsigned short sixteen = htons(16);
+            buf[0] = 43;
+            buf[1] = 0;
+            buf[2] = AHCP_STATEFUL_RELEASE;
+            buf[3] = 0;
+            memset(buf + 4, 0, 2);
+            memcpy(buf + 6, &sixteen, 2);
+            memcpy(buf + 8, unique_id, 16);
+            rc = build_stateful_data(buf + 24,
+                                     ipv4_address[0] == 0 ?
+                                     NULL : ipv4_address);
+            memset(&sin6, 0, sizeof(sin6));
+            sin6.sin6_family = AF_INET6;
+            memcpy(&sin6.sin6_addr, stateful_servers, 16);
+            sin6.sin6_port = htons(port);
+            if(debug_level >= 2)
+                printf("Sending stateful request.\n");
+            rc = ahcp_send(s, buf, 24 + rc,
+                           (struct sockaddr*)&sin6, sizeof(sin6));
+            if(rc < 0)
+                perror("ahcp_send");
+        }
         rc = unaccept_data(interfaces, dummy);
         if(rc < 0) {
             fprintf(stderr, "Couldn't unconfigure!\n");
