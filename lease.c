@@ -226,7 +226,7 @@ create_lease_file(char *fn)
     strncat(buf, ".lock", 300);
 
     /* O_EXCL is unsafe over NFS, do it the hard way */
-    snprintf(buft, 300, "%s.%s.%lu\n", fn, hn, (unsigned long)getpid());
+    snprintf(buft, 300, "%s.%s.%lu", fn, hn, (unsigned long)getpid());
     fd = open(buft, O_RDWR | O_CREAT | O_EXCL, 0644);
     if(fd < 0) {
         perror("creat(temp_lease_file)");
