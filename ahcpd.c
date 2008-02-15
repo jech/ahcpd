@@ -128,7 +128,7 @@ main(int argc, char **argv)
     int query_timeout = INITIAL_QUERY_TIMEOUT;
     int stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
     char *lease_dir = NULL;
-    unsigned int lease_first, lease_last;
+    unsigned int lease_first = 0, lease_last = 0;
 
     i = 1;
     while(i < argc && argv[i][0] == '-') {
@@ -850,7 +850,11 @@ main(int argc, char **argv)
             "Syntax: ahcpd "
             "[-m group] [-p port] [-a authority_file] [-e expires] [-n] [-N]\n"
             "              "
-            "[-i file] [-c script] [-s] [-S first last dir] interface...\n");
+            "[-i file] [-c script] [-s] "
+#ifndef NO_STATEFUL_SERVER
+            "[-S first last dir] "
+#endif
+            "interface...\n");
     exit(1);
 }
 
