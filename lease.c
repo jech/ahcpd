@@ -206,6 +206,18 @@ create_lease_file(char *fn)
 {
     char buft[300], buf[300];
     int fd, rc;
+    static char *hn = NULL;
+
+    if(hn == NULL) {
+        rc = gethostname(buf, 64);
+        if(rc < 0) {
+            perror("gethostname");
+            strcpy(buf, "my-host-is-broken");
+        }
+        hn = strdup(buf);
+        if(hn == NULL)
+            return -1;
+    }
 
     if(strlen(fn) > 255)
         return -1;
@@ -214,7 +226,7 @@ create_lease_file(char *fn)
     strncat(buf, ".lock", 300);
 
     /* O_EXCL is unsafe over NFS, do it the hard way */
-    snprintf(buft, 300, "%s.%lu\n", fn, (unsigned long)getpid());
+    snprintf(buft, 300, "%s.%s.%lu\n", fn, hn, (unsigned long)getpid());
     fd = open(buft, O_RDWR | O_CREAT | O_EXCL, 0644);
     if(fd < 0) {
         perror("creat(temp_lease_file)");
