@@ -46,6 +46,7 @@ THE SOFTWARE.
 #define REPLY 1
 #define STATEFUL_REQUEST 2
 #define STATEFUL_EXPIRE 3
+#define CHECK_NETWORKS 4
 
 struct timeval now;
 const struct timeval zero = {0, 0};
@@ -73,6 +74,7 @@ struct network {
 struct network networks[MAXNETWORKS];
 int numnetworks;
 char *interfaces[MAXNETWORKS + 1];
+struct timeval check_networks_time = {0, 0};
 struct timeval stateful_request_time = {0, 0};
 struct timeval stateful_expire_time = {0, 0};
 
@@ -371,6 +373,8 @@ main(int argc, char **argv)
             stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
         }
     }
+
+    set_timeout(-1, CHECK_NETWORKS, 30000, 1);
 
     if(debug_level >= 2)
         printf("Entering main loop.\n");
@@ -832,7 +836,15 @@ main(int argc, char **argv)
             set_timeout(-1, STATEFUL_REQUEST, STATEFUL_REQUEST_DELAY, 1);
             stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
         }
+
+        if(check_networks_time.tv_sec > 0 &&
+           timeval_compare(&check_networks_time, &now) <= 0) {
+            for(i = 0; i < numnetworks; i++)
+                check_network(&networks[i]);
+            set_timeout(-1, CHECK_NETWORKS, 30000, 1);
+        }
     }
+
     if(config_data) {
         if(ipv4_address[0] != 0) {
             unsigned short sixteen = htons(16);
@@ -881,7 +893,7 @@ main(int argc, char **argv)
 static void
 set_timeout(int net, int which, int msecs, int override)
 {
-    if(net < 0 && which != STATEFUL_REQUEST && which != STATEFUL_EXPIRE) {
+    if(net < 0 && (which == QUERY || which == REPLY)) {
         int i;
         for(i = 0; i < numnetworks; i++)
             set_timeout(i, which, msecs, override);
@@ -896,6 +908,8 @@ set_timeout(int net, int which, int msecs, int override)
             tv = &stateful_request_time;
         else if(which == STATEFUL_EXPIRE)
             tv = &stateful_expire_time;
+        else if(which == CHECK_NETWORKS)
+            tv = &check_networks_time;
         else
             abort();
 
