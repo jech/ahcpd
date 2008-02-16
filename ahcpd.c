@@ -51,6 +51,9 @@ struct timeval now;
 const struct timeval zero = {0, 0};
 
 static volatile sig_atomic_t exiting = 0;
+struct in6_addr protocol_group;
+int protocol_socket = -1;
+char *authority = NULL;
 unsigned char unique_id[16];
 char *unique_id_file = "/var/lib/ahcpd-unique-id";
 unsigned char buf[BUFFER_SIZE];
@@ -112,16 +115,45 @@ valid(int nowsecs, int origin, int expires, int age)
 #define INITIAL_STATEFUL_REQUEST_TIMEOUT 2000
 #define MAX_STATEFUL_REQUEST_TIMEOUT 60000
 
+static int
+check_network(struct network *net)
+{
+    int ifindex, rc;
+    struct ipv6_mreq mreq;
+
+    ifindex = if_nametoindex(net->ifname);
+    if(ifindex != net->ifindex) {
+        net->ifindex = ifindex;
+        if(net->ifindex > 0) {
+            memset(&mreq, 0, sizeof(mreq));
+            memcpy(&mreq.ipv6mr_multiaddr, &protocol_group, 16);
+            mreq.ipv6mr_interface = net->ifindex;
+            rc = setsockopt(protocol_socket, IPPROTO_IPV6, IPV6_JOIN_GROUP,
+                            (char*)&mreq, sizeof(mreq));
+            if(rc < 0) {
+                perror("setsockopt(IPV6_JOIN_GROUP)");
+                /* But continue */
+            }
+            if(authority) {
+                set_timeout(-1, QUERY, -1, 1);
+                set_timeout(-1, REPLY, 5000, 1);
+            } else {
+                set_timeout(-1, QUERY, QUERY_DELAY, 1);
+                set_timeout(-1, REPLY, -1, 1);
+            }
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int
 main(int argc, char **argv)
 {
     char *multicast = "ff02::cca6:c0f9:e182:5359";
     unsigned int port = 5359;
-    char *authority = NULL;
-    struct in6_addr group;
-    struct ipv6_mreq mreq;
     struct sockaddr_in6 sin6;
-    int fd, rc, s, i, j, net;
+    int fd, rc, i, j, net;
     unsigned int seed;
     int dummy = 0;
     int expires_delay = 3600;
@@ -219,20 +251,12 @@ main(int argc, char **argv)
             fprintf(stderr, "Too many interfaces.\n");
             exit(1);
         }
-        networks[j - i].ifname = argv[j];
-        networks[j - i].ifindex = if_nametoindex(argv[j]);
-        if(networks[j - i].ifindex <= 0) {
-            fprintf(stderr, "Unknown interface %s.\n", argv[j]);
-            exit(1);
-        }
-        networks[j - i].query_time = zero;
-        networks[j - i].reply_time = zero;
         interfaces[j - i] = argv[j];
     }
     numnetworks = j - i;
     interfaces[j - i] = NULL;
 
-    rc = inet_pton(AF_INET6, multicast, &group);
+    rc = inet_pton(AF_INET6, multicast, &protocol_group);
     if(rc <= 0)
         goto usage;
 
@@ -324,36 +348,28 @@ main(int argc, char **argv)
         }
     }
 
-    s = ahcp_socket(port);
-    if(s < 0) {
+    protocol_socket = ahcp_socket(port);
+    if(protocol_socket < 0) {
         perror("ahcp_socket");
         exit(1);
     }
 
     for(i = 0; i < numnetworks; i++) {
-        memset(&mreq, 0, sizeof(mreq));
-        memcpy(&mreq.ipv6mr_multiaddr, &group, 16);
-        mreq.ipv6mr_interface = networks[i].ifindex;
-        rc = setsockopt(s, IPPROTO_IPV6, IPV6_JOIN_GROUP,
-                        (char*)&mreq, sizeof(mreq));
-        if(rc < 0) {
-            perror("setsockopt(IPV6_JOIN_GROUP)");
-            exit(1);
+        networks[i].ifname = interfaces[i];
+        check_network(&networks[i]);
+        if(networks[i].ifindex <= 0) {
+            fprintf(stderr, "Warning: unknown interface %s.\n", argv[j]);
+            continue;
         }
     }
 
     init_signals();
 
     if(authority) {
-        set_timeout(-1, QUERY, -1, 1);
-        set_timeout(-1, REPLY, 5000, 1);
         if(!nostate && stateful_servers_len >= 16) {
             set_timeout(-1, STATEFUL_REQUEST, STATEFUL_REQUEST_DELAY, 1);
             stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
         }
-    } else {
-        set_timeout(-1, QUERY, QUERY_DELAY, 1);
-        set_timeout(-1, REPLY, -1, 1);
     }
 
     if(debug_level >= 2)
@@ -391,11 +407,11 @@ main(int argc, char **argv)
                 timeval_min_sec(&tv, 30);
             }
 
-            FD_SET(s, &readfds);
+            FD_SET(protocol_socket, &readfds);
             if(debug_level >= 3)
                 printf("Sleeping for %d.%03ds.\n",
                        (int)tv.tv_sec, (int)(tv.tv_usec / 1000));
-            rc = select(s + 1, &readfds, NULL, NULL, &tv);
+            rc = select(protocol_socket + 1, &readfds, NULL, NULL, &tv);
             if(rc < 0 && errno != EINTR) {
                 perror("select");
                 sleep(5);
@@ -408,8 +424,8 @@ main(int argc, char **argv)
         if(exiting)
             break;
 
-        if(FD_ISSET(s, &readfds)) {
-            rc = ahcp_recv(s, buf, BUFFER_SIZE,
+        if(FD_ISSET(protocol_socket, &readfds)) {
+            rc = ahcp_recv(protocol_socket, buf, BUFFER_SIZE,
                            (struct sockaddr*)&sin6, sizeof(sin6));
             if(rc < 0) {
                 if(errno != EAGAIN && errno != EINTR) {
@@ -420,6 +436,8 @@ main(int argc, char **argv)
             }
             if(IN6_IS_ADDR_LINKLOCAL(&sin6.sin6_addr)) {
                 for(net = 0; net < numnetworks; net++) {
+                    if(networks[net].ifindex <= 0)
+                        continue;
                     if(networks[net].ifindex == sin6.sin6_scope_id)
                         break;
                 }
@@ -593,7 +611,7 @@ main(int argc, char **argv)
                         buf[5] = 0;
                         buf[8 + ulen] = 0;
                         buf[8 + ulen + 1] = 0;
-                        ahcp_send(s, buf, 8 + ulen + 2,
+                        ahcp_send(protocol_socket, buf, 8 + ulen + 2,
                                   (struct sockaddr*)&sin6, sizeof(sin6));
                     } else {
                         int i;
@@ -605,7 +623,7 @@ main(int argc, char **argv)
                         memcpy(buf + 4, &lease_time, 2);
                         i = 8 + ulen;
                         i += build_stateful_data(buf + i, ipv4);
-                        ahcp_send(s, buf, i,
+                        ahcp_send(protocol_socket, buf, i,
                                   (struct sockaddr*)&sin6, sizeof(sin6));
                     }
                 } else {
@@ -723,12 +741,12 @@ main(int argc, char **argv)
 
                 memset(&sin6, 0, sizeof(sin6));
                 sin6.sin6_family = AF_INET6;
-                memcpy(&sin6.sin6_addr, &group, 16);
+                memcpy(&sin6.sin6_addr, &protocol_group, 16);
                 sin6.sin6_port = htons(port);
                 sin6.sin6_scope_id = networks[net].ifindex;
                 if(debug_level >= 2)
                     printf("Sending AHCP reply on %s.\n", networks[net].ifname);
-                rc = ahcp_send(s, buf, 20 + data_len,
+                rc = ahcp_send(protocol_socket, buf, 20 + data_len,
                                (struct sockaddr*)&sin6, sizeof(sin6));
                 if(rc < 0)
                     perror("ahcp_send");
@@ -750,13 +768,13 @@ main(int argc, char **argv)
 
                 memset(&sin6, 0, sizeof(sin6));
                 sin6.sin6_family = AF_INET6;
-                memcpy(&sin6.sin6_addr, &group, 16);
+                memcpy(&sin6.sin6_addr, &protocol_group, 16);
                 sin6.sin6_port = htons(port);
                 sin6.sin6_scope_id = networks[net].ifindex;
                 if(debug_level >= 2)
                     printf("Sending AHCP request on %s.\n",
                            networks[net].ifname);
-                rc = ahcp_send(s, buf, 4,
+                rc = ahcp_send(protocol_socket, buf, 4,
                                (struct sockaddr*)&sin6, sizeof(sin6));
                 if(rc < 0)
                     perror("ahcp_send");
@@ -799,7 +817,7 @@ main(int argc, char **argv)
             sin6.sin6_port = htons(port);
             if(debug_level >= 2)
                 printf("Sending stateful request.\n");
-            rc = ahcp_send(s, buf, 24 + rc,
+            rc = ahcp_send(protocol_socket, buf, 24 + rc,
                            (struct sockaddr*)&sin6, sizeof(sin6));
             if(rc < 0)
                 perror("ahcp_send");
@@ -834,7 +852,7 @@ main(int argc, char **argv)
             sin6.sin6_port = htons(port);
             if(debug_level >= 2)
                 printf("Sending stateful request.\n");
-            rc = ahcp_send(s, buf, 24 + rc,
+            rc = ahcp_send(protocol_socket, buf, 24 + rc,
                            (struct sockaddr*)&sin6, sizeof(sin6));
             if(rc < 0)
                 perror("ahcp_send");
