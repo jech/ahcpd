@@ -591,7 +591,9 @@ main(int argc, char **argv)
                         buf[3] = 0;
                         buf[4] = 0;
                         buf[5] = 0;
-                        ahcp_send(s, buf, 8 + ulen,
+                        buf[8 + ulen] = 0;
+                        buf[8 + ulen + 1] = 0;
+                        ahcp_send(s, buf, 8 + ulen + 2,
                                   (struct sockaddr*)&sin6, sizeof(sin6));
                     } else {
                         int i;
