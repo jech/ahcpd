@@ -1,5 +1,6 @@
 ahcpd 0.4 (unreleased)
 
+  * Implemented stateful configuration for IPv4.
   * Tweaked timing to avoid hopping between competing configurations.
   * Fixed conversion of Babel hello intervals to seconds.
 
