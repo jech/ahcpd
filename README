@@ -1,14 +1,20 @@
 Ahcpd is a daemon for configuring an IPv6 network using the Ad-Hoc
 Configuration Protocol (AHCP).  AHCP is designed for wireless mesh
-networks, where IPv6 autoconfiguration and DHCPv6 do not work, but may
+networks, where IPv6 autoconfiguration and DHCP do not work, but may
 also be used on wired networks.
+
+AHCP autoconfiguration happens in two stages.  First, a block of
+stateless autoconfiguration data is flooded throughout the network;
+this contains enough information to set up IPv6 routing.  Then, AHCP
+peers contact a stateful AHCP server using IPv6 unicast in order to
+get the information necessary to configure IPv4 routing.
 
 
 Installation
 ************
 
   $ make
-  $ su -c 'make install'
+  # make install
 
 If compiling for OpenWRT, you will probably want to say something like
 
@@ -38,8 +44,10 @@ ahcp-generate.  For example
   $ ahcp-generate -p fde6:20f5:c9ac:358: -P babel -n fde6:20f5:c9ac:358:1 \
         > ahcp.dat
 
-Please see the ahcp-generate(8) manual page for more information about
-the possible flags.
+If you intend to run a stateful AHCP server, you should add its address:
+
+  $ ahcp-generate -p fde6:20f5:c9ac:358: -P babel -n fde6:20f5:c9ac:358:1 \
+        -S fde6:20f5:c9ac:358:1 > ahcp.dat
 
 3. Configure an authoritative AHCP peer
 ---------------------------------------
@@ -52,7 +60,7 @@ can be changed with the ``-e'' flag to ahcpd).
 
 On each authoritative AHCP peer, run
 
-  ahcpd -a /path/to/ahcp.dat eth1
+  # ahcpd -a /path/to/ahcp.dat eth1
 
 where eth1 is the interface on which you want the peer to participate
 in the AHCP protocol.  Multiple interfaces can be included, in which
@@ -63,18 +71,35 @@ like the other ones.  You may want to keep the authoritative peers
 network configuration unchanged (for example because they use static
 routing); in that case, please see the use of the `-c' flag below.
 
-4. Run AHCP on your other hosts
+4. Set up an AHCP stateful server
+---------------------------------
+
+The AHCP stateful server is responsible for giving out IPv4 addresses
+to clients.  It should run on a stable machine with a reliable disk,
+where it can store its lease database.
+
+  # mkdir /var/lib/ahcp-leases
+  # ahcpd -S 192.168.1.1 192.168.1.254 /var/lib/ahcp-leases eth0
+
+If the stateful server is also an authoritative peer, you should add
+the -a flag:
+
+  # ahcpd -a /path/to/ahcp.dat \
+          -S 192.168.1.1 192.168.1.254 /var/lib/ahcp-leases \
+          eth0
+
+5. Run AHCP on your other hosts
 -------------------------------
 
 On each AHCP peer, run
 
-  ahcpd eth1
+  # ahcpd eth1
 
 where eth1 is the interface on which you want your peer to participate
 in the AHCP protocol.  Multiple interfaces can be included, in which
 case the peer will forward configuration information between interfaces.
 
-5. Configuring non-standard peers
+6. Configuring non-standard peers
 ---------------------------------
 
 Some AHCP peers will need to use a non-standard configuration, for
@@ -82,7 +107,7 @@ example because they are Internet gateways.  You can configure a peer
 manually, then tell ahcpd to not touch the network configuration by
 using the ``-c'' flag:
 
-  $ ahcpd -c /path/to/dummy-config.sh eth1
+  # ahcpd -c /path/to/dummy-config.sh eth1
 
 If you are using OLSR, you can request that ahcpd add sections to the
 olsrd configuration file by creating a file
