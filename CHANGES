@@ -1,4 +1,4 @@
-ahcpd 0.4 (unreleased)
+17 February 2008: ahcpd 0.4
 
   * Implemented stateful configuration for IPv4.
   * Tweaked timing to avoid hopping between competing configurations.
