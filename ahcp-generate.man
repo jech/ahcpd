@@ -26,16 +26,20 @@ or
 .BI \-g " gateway"
 For the routing protocol
 .BR static ,
-specify the default gateway that hosts will use.
+specify the default gateway that hosts will use.  This option may be
+repeated multiple times.
 .TP
 .BI \-n " name\-server"
-Specify the IPv6 address of the name server that nodes will use.
+Specify the IPv6 address of the name server that nodes will use.  This
+option may be repeated multiple times.
 .TP
 .BI \-N " ntp\-server"
 Specify the IPv6 address of the (S)NTP server that nodes will use.
+This option may be repeated multiple times.
 .TP
 .BI \-s " stateful\-server"
-Specify the IPv6 address of a stateful AHCP server.
+Specify the IPv6 address of a stateful AHCP server.  This option may
+be repeated multiple times.
 .TP
 .BI \-e " expire"
 Specify the time in seconds for which this configuration will be
