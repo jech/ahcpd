@@ -162,6 +162,7 @@ main(int argc, char **argv)
 
     prefixes = reverse(prefixes, NULL);
     name_servers = reverse(name_servers, NULL);
+    ntp_servers = reverse(ntp_servers, NULL);
     stateful_servers = reverse(stateful_servers, NULL);
     default_gateways = reverse(default_gateways, NULL);
 
