@@ -39,18 +39,21 @@ THE SOFTWARE.
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
-#include "config.h"
 #include "constants.h"
 
 #define MAXSIZE 2048
 
+struct list;
+
 unsigned int expires_delta = 4 * 30 * 24 * 60 * 60;
-char *prefix = NULL;
+struct list *prefixes = NULL;
 unsigned char routing_protocol = ROUTING_PROTOCOL_BABEL;
-char *default_gateway = NULL;
-char *name_server = NULL;
-char *ntp_server = NULL;
-char *stateful_server = NULL;
+
+struct list *name_servers = NULL;
+struct list *ntp_servers = NULL;
+struct list *stateful_servers = NULL;
+struct list *default_gateways = NULL;
+
 unsigned char olsr_multicast_address[16] =
     { 0xff, 0x04, 0, 0, 0, 0, 0, 0,
       0xcc, 0xa6, 0xc0, 0xf9, 0xe1, 0x82, 0x53, 0x59 };
@@ -59,6 +62,46 @@ unsigned char babel_multicast_address[16] =
       0xcc, 0xa6, 0xc0, 0xf9, 0xe1, 0x82, 0x53, 0x73 };
 unsigned int babel_port_number = 8475;
 unsigned char link_quality = 0;
+
+struct list {
+    char *head;
+    struct list *tail;
+};
+
+static struct list *
+cons(char *head, struct list *tail)
+{
+    struct list *cell;
+
+    cell = malloc(sizeof(struct list));
+    if(cell == NULL) abort();
+
+    cell->head = head;
+    cell->tail = tail;
+    return cell;
+}
+
+static struct list *
+reverse(struct list *list, struct list *result)
+{
+    struct list *tail;
+
+    if(list == NULL)
+        return result;
+
+    tail = list->tail;
+    list->tail = result;
+    return reverse(tail, list);
+}
+
+static int
+length(struct list *list)
+{
+    if(list == NULL)
+        return 0;
+
+    return 1 + length(list->tail);
+}
 
 int
 main(int argc, char **argv)
@@ -79,16 +122,17 @@ main(int argc, char **argv)
         "              "
         "[-s stateful-server] [-e seconds] > ahcp.dat";
     int rc;
+    struct list *l;
 
     while(1) {
         int c;
         c = getopt(argc, argv, "p:n:N:g:P:s:e:");
         if(c < 0) break;
         switch(c) {
-        case 'p': prefix = optarg; break;
-        case 'n': name_server = optarg; break;
-        case 'N': ntp_server = optarg; break;
-        case 'g': default_gateway = optarg; break;
+        case 'p': prefixes = cons(optarg, prefixes); break;
+        case 'n': name_servers = cons(optarg, name_servers); break;
+        case 'N': ntp_servers = cons(optarg, ntp_servers); break;
+        case 'g': default_gateways = cons(optarg, default_gateways); break;
         case 'P':
             if(strcasecmp(optarg, "static") == 0)
                 routing_protocol = ROUTING_PROTOCOL_STATIC;
@@ -101,13 +145,13 @@ main(int argc, char **argv)
                 exit(1);
             }
             break;
-        case 's': stateful_server = optarg; break;
+        case 's': stateful_servers = cons(optarg, stateful_servers); break;
         case 'e': expires_delta = atoi(optarg); break;
         default: fprintf(stderr, "%s\n", usage); exit(1); break;
         }
     }
 
-    if(prefix == NULL) {
+    if(prefixes == NULL) {
         fprintf(stderr, "%s\n", usage);
         exit(1);
     }
@@ -115,6 +159,11 @@ main(int argc, char **argv)
     if(argc != optind) {
         fprintf(stderr, "%s\n", usage); exit(1);
     }
+
+    prefixes = reverse(prefixes, NULL);
+    name_servers = reverse(name_servers, NULL);
+    stateful_servers = reverse(stateful_servers, NULL);
+    default_gateways = reverse(default_gateways, NULL);
 
     i = 0;
 
@@ -157,35 +206,41 @@ main(int argc, char **argv)
         EMIT4(now.tv_sec + expires_delta);
     }
 
-    if(prefix) {
+    if(prefixes) {
         unsigned char p[16];
-        rc = inet_pton(AF_INET6, prefix, p);
-        if(rc < 0) {
-            fprintf(stderr, "Couldn't parse prefix.\n");
-            exit(1);
-        }
         EMIT1(OPT_IPv6_PREFIX);
-        EMIT1(16);
-        EMIT(p, 16);
+        EMIT1(16 * length(prefixes));
+        l = prefixes;
+        while(l) {
+            rc = inet_pton(AF_INET6, l->head, p);
+            if(rc < 0) {
+                fprintf(stderr, "Couldn't parse prefix.\n");
+                exit(1);
+            }
+            EMIT(p, 16);
+            l = l->tail;
+        }
     }
 
     if(routing_protocol == ROUTING_PROTOCOL_STATIC) {
-        unsigned char g[16];
-        if(default_gateway) {
-            rc = inet_pton(AF_INET6, default_gateway, g);
-            if(rc < 0) {
-                fprintf(stderr, "Couldn't parse default gateway.\n");
-                exit(1);
-            }
-        }
         EMIT1(OPT_MANDATORY);
         EMIT1(OPT_ROUTING_PROTOCOL);
-        EMIT1(default_gateway ? 19 : 1);
+        EMIT1(default_gateways ? 3 + 16 * length(default_gateways) : 1);
         EMIT1(ROUTING_PROTOCOL_STATIC);
-        if(default_gateway) {
+        if(default_gateways) {
+            unsigned char g[16];
             EMIT1(STATIC_DEFAULT_GATEWAY);
-            EMIT1(16);
-            EMIT(g, 16);
+            EMIT1(16 * length(default_gateways));
+            l = default_gateways;
+            while(l) {
+                rc = inet_pton(AF_INET6, l->head, g);
+                if(rc < 0) {
+                    fprintf(stderr, "Couldn't parse default gateway.\n");
+                    exit(1);
+                }
+                EMIT(g, 16);
+                l = l->tail;
+            }
         }
     } else if(routing_protocol == ROUTING_PROTOCOL_OLSR) {
         EMIT1(OPT_MANDATORY);
@@ -214,40 +269,52 @@ main(int argc, char **argv)
         EMIT2(babel_port_number);
     }
 
-    if(name_server) {
+    if(name_servers) {
         unsigned char n[16];
-        rc = inet_pton(AF_INET6, name_server, n);
-        if(rc < 0) {
-            fprintf(stderr, "Couldn't parse name server.\n");
-            exit(1);
-        }
         EMIT1(OPT_NAME_SERVER);
-        EMIT1(16);
-        EMIT(n, 16);
+        EMIT1(16 * length(name_servers));
+        l = name_servers;
+        while(l) {
+            rc = inet_pton(AF_INET6, l->head, n);
+            if(rc < 0) {
+                fprintf(stderr, "Couldn't parse name server.\n");
+                exit(1);
+            }
+            EMIT(n, 16);
+            l = l->tail;
+        }
     }
 
-    if(ntp_server) {
+    if(ntp_servers) {
         unsigned char n[16];
-        rc = inet_pton(AF_INET6, ntp_server, n);
-        if(rc < 0) {
-            fprintf(stderr, "Couldn't parse NTP server.\n");
-            exit(1);
-        }
         EMIT1(OPT_NTP_SERVER);
-        EMIT1(16);
-        EMIT(n, 16);
+        EMIT1(16 * length(ntp_servers));
+        l = ntp_servers;
+        while(l) {
+            rc = inet_pton(AF_INET6, l->head, n);
+            if(rc < 0) {
+                fprintf(stderr, "Couldn't parse NTP server.\n");
+                exit(1);
+            }
+            EMIT(n, 16);
+            l = l->tail;
+        }
     }
 
-    if(stateful_server) {
+    if(stateful_servers) {
         unsigned char n[16];
-        rc = inet_pton(AF_INET6, stateful_server, n);
-        if(rc < 0) {
-            fprintf(stderr, "Couldn't parse stateful server.\n");
-            exit(1);
-        }
         EMIT1(OPT_AHCP_STATEFUL_SERVER);
-        EMIT1(16);
-        EMIT(n, 16);
+        EMIT1(16 * length(stateful_servers));
+        l = stateful_servers;
+        while(l) {
+            rc = inet_pton(AF_INET6, l->head, n);
+            if(rc < 0) {
+                fprintf(stderr, "Couldn't parse stateful server.\n");
+                exit(1);
+            }
+            EMIT(n, 16);
+            l = l->tail;
+        }
     }
 
     write(1, buf, i);
