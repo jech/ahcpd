@@ -238,7 +238,7 @@ main(int argc, char **argv)
         EMIT(n, 16);
     }
 
-    if(ntp_server) {
+    if(stateful_server) {
         unsigned char n[16];
         rc = inet_pton(AF_INET6, stateful_server, n);
         if(rc < 0) {
