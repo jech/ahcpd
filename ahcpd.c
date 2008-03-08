@@ -618,8 +618,10 @@ main(int argc, char **argv)
                         buf[5] = 0;
                         buf[8 + ulen] = 0;
                         buf[8 + ulen + 1] = 0;
-                        ahcp_send(protocol_socket, buf, 8 + ulen + 2,
-                                  (struct sockaddr*)&sin6, sizeof(sin6));
+                        rc = ahcp_send(protocol_socket, buf, 8 + ulen + 2,
+                                       (struct sockaddr*)&sin6, sizeof(sin6));
+                        if(rc < 0)
+                            perror("ahcp_send");
                     } else {
                         int i;
                         if(debug_level >= 2)
@@ -630,8 +632,10 @@ main(int argc, char **argv)
                         memcpy(buf + 4, &lease_time, 2);
                         i = 8 + ulen;
                         i += build_stateful_data(buf + i, ipv4);
-                        ahcp_send(protocol_socket, buf, i,
-                                  (struct sockaddr*)&sin6, sizeof(sin6));
+                        rc = ahcp_send(protocol_socket, buf, i,
+                                       (struct sockaddr*)&sin6, sizeof(sin6));
+                        if(rc < 0)
+                            perror("ahcp_send");
                     }
                 } else {
                     /* Release */
