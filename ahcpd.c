@@ -392,6 +392,7 @@ main(int argc, char **argv)
         }
         timeval_min(&tv, &stateful_request_time);
         timeval_min(&tv, &stateful_expire_time);
+        timeval_min(&tv, &check_networks_time);
 
         if(!authority && data_age_origin > 0) {
             int data_age = now.tv_sec - data_age_origin;
