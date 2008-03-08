@@ -1,3 +1,9 @@
+ahcpd 0.5 (unreleased):
+
+  * Made ahcpd gracefully survive interfaces going up/down or being
+    renumbered, as usually happens when tunnels or VPNs are started or
+    stopped.
+
 17 February 2008: ahcpd 0.4
 
   * Implemented stateful configuration for IPv4.
