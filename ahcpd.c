@@ -906,7 +906,7 @@ set_timeout(int net, int which, int msecs, int override)
             set_timeout(i, which, msecs, override);
     } else {
         struct timeval *tv;
-        int ms = msecs / 2 + random() % msecs;
+        int ms = msecs == 0 ? 0 : msecs / 2 + random() % msecs;
         if(which == QUERY)
             tv = &networks[net].query_time;
         else if(which == REPLY)
