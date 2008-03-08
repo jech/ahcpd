@@ -620,7 +620,9 @@ main(int argc, char **argv)
                         buf[8 + ulen + 1] = 0;
                         rc = ahcp_send(protocol_socket, buf, 8 + ulen + 2,
                                        (struct sockaddr*)&sin6, sizeof(sin6));
-                        if(rc < 0)
+                        if(rc < 0) {
+                            if(errno == ENETUNREACH)
+                                set_timeout(-1, CHECK_NETWORKS, 0, 0);
                             perror("ahcp_send");
                     } else {
                         int i;
@@ -634,8 +636,11 @@ main(int argc, char **argv)
                         i += build_stateful_data(buf + i, ipv4);
                         rc = ahcp_send(protocol_socket, buf, i,
                                        (struct sockaddr*)&sin6, sizeof(sin6));
-                        if(rc < 0)
+                        if(rc < 0) {
+                            if(errno == ENETUNREACH)
+                                set_timeout(-1, CHECK_NETWORKS, 0, 0);
                             perror("ahcp_send");
+                        }
                     }
                 } else {
                     /* Release */
@@ -759,8 +764,11 @@ main(int argc, char **argv)
                     printf("Sending AHCP reply on %s.\n", networks[net].ifname);
                 rc = ahcp_send(protocol_socket, buf, 20 + data_len,
                                (struct sockaddr*)&sin6, sizeof(sin6));
-                if(rc < 0)
+                if(rc < 0) {
+                    if(errno == ENETUNREACH)
+                        set_timeout(-1, CHECK_NETWORKS, 0, 0);
                     perror("ahcp_send");
+                }
                 if(!authority)
                     set_timeout(net, REPLY,
                                 MAX((data_expires - data_origin) * 125, 120000),
@@ -787,8 +795,11 @@ main(int argc, char **argv)
                            networks[net].ifname);
                 rc = ahcp_send(protocol_socket, buf, 4,
                                (struct sockaddr*)&sin6, sizeof(sin6));
-                if(rc < 0)
+                if(rc < 0) {
+                    if(errno == ENETUNREACH)
+                        set_timeout(-1, CHECK_NETWORKS, 0, 0);
                     perror("ahcp_send");
+                }
                 if(authority)
                     set_timeout(net, QUERY, -1, 1);
                 else if(config_data)
@@ -830,8 +841,11 @@ main(int argc, char **argv)
                 printf("Sending stateful request.\n");
             rc = ahcp_send(protocol_socket, buf, 24 + rc,
                            (struct sockaddr*)&sin6, sizeof(sin6));
-            if(rc < 0)
+            if(rc < 0) {
+                if(errno == ENETUNREACH)
+                    set_timeout(-1, CHECK_NETWORKS, 0, 0);
                 perror("ahcp_send");
+            }
             stateful_request_timeout = MIN(2 * stateful_request_timeout,
                                            MAX_STATEFUL_REQUEST_TIMEOUT);
             set_timeout(-1, STATEFUL_REQUEST, stateful_request_timeout, 1);
@@ -873,8 +887,11 @@ main(int argc, char **argv)
                 printf("Sending stateful request.\n");
             rc = ahcp_send(protocol_socket, buf, 24 + rc,
                            (struct sockaddr*)&sin6, sizeof(sin6));
-            if(rc < 0)
+            if(rc < 0) {
+                if(errno == ENETUNREACH)
+                    set_timeout(-1, CHECK_NETWORKS, 0, 0);
                 perror("ahcp_send");
+            }
         }
         rc = unaccept_data(interfaces, dummy);
         if(rc < 0) {
