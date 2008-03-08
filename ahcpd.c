@@ -134,7 +134,8 @@ check_network(struct network *net)
                             (char*)&mreq, sizeof(mreq));
             if(rc < 0) {
                 perror("setsockopt(IPV6_JOIN_GROUP)");
-                /* But continue */
+                net->ifindex = 0;
+                goto fail;
             }
             if(authority) {
                 set_timeout(-1, QUERY, -1, 1);
@@ -146,6 +147,7 @@ check_network(struct network *net)
             return 1;
         }
     }
+ fail:
     return 0;
 }
 
