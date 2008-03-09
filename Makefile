@@ -19,13 +19,13 @@ ahcp-generate-address: ahcp-generate-address.o
 	$(CC) $(CFLAGS) $(LDFLAGS) -o ahcp-generate-address ahcp-generate-address.o $(LDLIBS)
 
 ahcpd.html: ahcpd.man
-	groff -man -Thtml ahcpd.man > ahcpd.html
+	rman -f html ahcpd.man > ahcpd.html
 
 ahcp-generate.html: ahcp-generate.man
-	groff -man -Thtml ahcp-generate.man > ahcp-generate.html
+	rman -f html ahcp-generate.man > ahcp-generate.html
 
 ahcp-generate-address.html: ahcp-generate-address.man
-	groff -man -Thtml ahcp-generate-address.man > ahcp-generate-address.html
+	rman -f html ahcp-generate-address.man > ahcp-generate-address.html
 
 .PHONY: install
 
