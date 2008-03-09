@@ -624,6 +624,7 @@ main(int argc, char **argv)
                             if(errno == ENETUNREACH)
                                 set_timeout(-1, CHECK_NETWORKS, 0, 0);
                             perror("ahcp_send");
+                        }
                     } else {
                         int i;
                         if(debug_level >= 2)
