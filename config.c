@@ -432,6 +432,9 @@ doit(const unsigned char *data, int len, unsigned char *ipv4,
     if(prefix) free(prefix);
     if(nameserver) free(nameserver);
     if(ntp_server) free(ntp_server);
+    if(static_default_gw) free(static_default_gw);
+    if(olsr_multicast_address) free(olsr_multicast_address);
+    if(babel_multicast_address) free(babel_multicast_address);
     return 1;
 }
 
