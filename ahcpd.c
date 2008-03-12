@@ -362,7 +362,8 @@ main(int argc, char **argv)
         networks[i].ifname = interfaces[i];
         check_network(&networks[i]);
         if(networks[i].ifindex <= 0) {
-            fprintf(stderr, "Warning: unknown interface %s.\n", argv[j]);
+            fprintf(stderr, "Warning: unknown interface %s.\n",
+                    networks[i].ifname);
             continue;
         }
     }
