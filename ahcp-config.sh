@@ -14,7 +14,8 @@ nl='
 '
 
 olsrd_pidfile=/var/run/ahcp_olsrd_pid
-babel_pidfile=/var/run/ahcp_babel_pid
+babel_pidfile=/var/run/babel.pid
+
 usage="Usage: $0 (start|stop)"
 debuglevel=${AHCP_DEBUG_LEVEL:-1}
 if (echo "$AHCP_PREFIX" | grep -q ' ') ; then
@@ -210,12 +211,9 @@ stop_olsr() {
 }
 
 start_babel() {
-    full=${1:-true}
-
     multicast="${AHCP_BABEL_MULTICAST_ADDRESS:+-m $AHCP_BABEL_MULTICAST_ADDRESS}"
     port="${AHCP_BABEL_PORT_NUMBER:+-p $AHCP_BABEL_PORT_NUMBER}"
     hello="${AHCP_BABEL_HELLO_INTERVAL:+-h $(expr $AHCP_BABEL_HELLO_INTERVAL / 100)}"
-    ipv4_exports="${ipv4_address:+-X $ipv4_address 0}"
 
     if [ -r /etc/ahcp/ahcp-babel-options ] ; then
         options="$(cat /etc/ahcp/ahcp-babel-options)"
@@ -227,11 +225,9 @@ start_babel() {
 
     first_addr="$(if_address $first_if)"
 
-    if $full; then
-        # Babel can work with unnumbered links, so only number the first one
-        add_address $first_if $first_addr
-        nameserver_start
-    fi
+    # Babel can work with unnumbered links, so only number the first one
+    add_address $first_if $first_addr
+    nameserver_start
 
     if [ $debuglevel -le 2 ] ; then
         babel_debuglevel=0
@@ -239,22 +235,25 @@ start_babel() {
         babel_debuglevel="$(expr $debuglevel - 2)"
     fi
 
-    babel -d $babel_debuglevel $multicast $port $hello $options \
-          -X $first_addr 0 $ipv4_exports $first_addr \
-          $interfaces $more_interfaces &
-    echo $! > $babel_pidfile
+    babel -I $babel_pidfile -d $babel_debuglevel \
+          $multicast $port $hello $options \
+          $first_addr $interfaces $more_interfaces &
+    sleep 1
 }
 
 stop_babel() {
-    full=${1:-true}
-
-    kill $(cat "$babel_pidfile")
-    rm "$babel_pidfile"
-
-    if $full; then
-        del_address $first_if
-        nameserver_stop
+    if [ -e "$babel_pidfile" ]; then
+        kill $(cat "$babel_pidfile")
+        sleep 1
+        [ -e "$babel_pidfile" ] && sleep 1
+        [ -e "$babel_pidfile" ] && sleep 1
+        [ -e "$babel_pidfile" ] && sleep 1
+        [ -e "$babel_pidfile" ] && sleep 1
+        echo "Failed to kill Babel."
     fi
+
+    del_address $first_if
+    nameserver_stop
 }
 
 case $1 in
@@ -273,17 +272,15 @@ case $1 in
             *) die "Unknown routing protocol $AHCP_ROUTING_PROTOCOL";;
         esac;;
     start-ipv4)
+        add_ipv4_addresses
         case ${AHCP_ROUTING_PROTOCOL:-static} in
-            [Bb]abel)
-                stop_babel false
-                add_ipv4_addresses
-                sleep 2
-                start_babel false
-                ;;
-            *) add_ipv4_addresses ;;
+            [Bb]abel) kill -USR2 $(cat "$babel_pidfile");;
         esac;;
     stop-ipv4)
-        del_ipv4_addresses ;;
+        del_ipv4_addresses
+        case ${AHCP_ROUTING_PROTOCOL:-static} in
+            [Bb]abel) kill -USR2 $(cat "$babel_pidfile");;
+        esac;;
 esac
 
 if [ -x /etc/ahcp/ahcp-local.sh ]; then
