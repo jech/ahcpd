@@ -249,7 +249,7 @@ stop_babel() {
         [ -e "$babel_pidfile" ] && sleep 1
         [ -e "$babel_pidfile" ] && sleep 1
         [ -e "$babel_pidfile" ] && sleep 1
-        echo "Failed to kill Babel."
+        [ -e "$babel_pidfile" ] && echo "Failed to kill Babel."
     fi
 
     del_address $first_if
