@@ -18,14 +18,20 @@ ahcp-generate: ahcp-generate.o
 ahcp-generate-address: ahcp-generate-address.o
 	$(CC) $(CFLAGS) $(LDFLAGS) -o ahcp-generate-address ahcp-generate-address.o $(LDLIBS)
 
+.SUFFIXES: .man .html
+
+.man.html:
+	rman -f html $< | \
+	sed -e "s|<a href='babel.8'|<a href=\"../babel/babel.html\"|" \
+            -e "s|<a href='\\(ahcp[-a-z]*\\).8'|<a href=\"\1.html\"|" \
+	    -e "s|<a href='[^']*8'>\\(.*(8)\\)</a>|\1|" \
+	> $@
+
 ahcpd.html: ahcpd.man
-	rman -f html ahcpd.man > ahcpd.html
 
 ahcp-generate.html: ahcp-generate.man
-	rman -f html ahcp-generate.man > ahcp-generate.html
 
 ahcp-generate-address.html: ahcp-generate-address.man
-	rman -f html ahcp-generate-address.man > ahcp-generate-address.html
 
 .PHONY: install
 
