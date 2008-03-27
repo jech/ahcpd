@@ -858,7 +858,6 @@ main(int argc, char **argv)
             unaccept_stateful_data(interfaces);
             set_timeout(-1, STATEFUL_REQUEST, STATEFUL_REQUEST_DELAY, 1);
             stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
-            stateful_expire_time = zero;
         }
 
         if(check_networks_time.tv_sec > 0 &&
