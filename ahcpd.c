@@ -857,6 +857,7 @@ main(int argc, char **argv)
            timeval_compare(&stateful_expire_time, &now) <= 0) {
             unaccept_stateful_data(interfaces);
             set_timeout(-1, STATEFUL_REQUEST, STATEFUL_REQUEST_DELAY, 1);
+            set_timeout(-1, STATEFUL_EXPIRE, -1, 1);
             stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
         }
 
