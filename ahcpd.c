@@ -95,7 +95,7 @@ void timeval_minus(struct timeval *d,
 static int
 time_broken(int nowsecs)
 {
-    return nowsecs < 1000000000;
+    return nowsecs < 1200000000;
 }
 
 static int
