@@ -117,6 +117,12 @@ List of interfaces that participate in the
 protocol but not in the
 .I AHCP
 protocol.
+.TP
+.B SIGUSR1
+Dump ahcpd's status to standard output or to the log file.
+.TP
+.B SIGUSR2
+Reopen the log file.
 .SH SEE ALSO
 .BR dhcpcd (8),
 .BR dhclient (8),
