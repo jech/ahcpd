@@ -51,7 +51,7 @@ THE SOFTWARE.
 struct timeval now;
 const struct timeval zero = {0, 0};
 
-static volatile sig_atomic_t exiting = 0;
+static volatile sig_atomic_t exiting = 0, dumping = 0, changed = 0;
 struct in6_addr protocol_group;
 int protocol_socket = -1;
 char *authority = NULL;
@@ -507,6 +507,37 @@ main(int argc, char **argv)
 
         if(exiting)
             break;
+
+        if(dumping) {
+            if(config_data) {
+                if(authority)
+                    printf("Authoritative stateless data.\n");
+                else
+                    printf("Stateless data valid for %d seconds.\n",
+                           valid(now.tv_sec, data_origin, data_expires,
+                                 now.tv_sec - data_age_origin));
+            } else {
+                printf("No stateless data.\n");
+            }
+            if(ipv4_address[0] != 0)
+                printf("Stateful data, valid for %d seconds.\n",
+                       (int)(stateful_expire_time.tv_sec - now.tv_sec));
+            else
+                printf("No stateful data.\n");
+            printf("\n");
+            fflush(stdout);
+
+            dumping = 0;
+        }
+
+        if(changed) {
+            rc = reopen_logfile();
+            if(rc < 0) {
+                perror("reopen_logfile");
+                goto fail;
+            }
+            changed = 0;
+        }
 
         if(FD_ISSET(protocol_socket, &readfds)) {
             rc = ahcp_recv(protocol_socket, buf, BUFFER_SIZE,
@@ -1044,6 +1075,18 @@ sigexit(int signo)
 }
 
 static void
+sigdump(int signo)
+{
+    dumping = 1;
+}
+
+static void
+sigchanged(int signo)
+{
+    changed = 1;
+}
+
+static void
 init_signals(void)
 {
     struct sigaction sa;
@@ -1066,6 +1109,26 @@ init_signals(void)
     sa.sa_mask = ss;
     sa.sa_flags = 0;
     sigaction(SIGINT, &sa, NULL);
+
+    sigemptyset(&ss);
+    sa.sa_handler = sigdump;
+    sa.sa_mask = ss;
+    sa.sa_flags = 0;
+    sigaction(SIGUSR1, &sa, NULL);
+
+    sigemptyset(&ss);
+    sa.sa_handler = sigchanged;
+    sa.sa_mask = ss;
+    sa.sa_flags = 0;
+    sigaction(SIGUSR2, &sa, NULL);
+
+#ifdef SIGINFO
+    sigemptyset(&ss);
+    sa.sa_handler = sigdump;
+    sa.sa_mask = ss;
+    sa.sa_flags = 0;
+    sigaction(SIGINFO, &sa, NULL);
+#endif
 }
 
 int
