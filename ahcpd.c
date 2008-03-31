@@ -62,6 +62,8 @@ unsigned int data_origin = 0, data_expires = 0, data_age_origin = 0;
 int nodns = 0, nostate = 0;
 char *config_script = "/usr/local/bin/ahcp-config.sh";
 int debug_level = 1;
+int do_daemonise = 0;
+char *logfile = NULL, *pidfile = NULL;
 
 struct network {
     char *ifname;
@@ -91,6 +93,9 @@ void timeval_min(struct timeval *d, const struct timeval *s);
 void timeval_min_sec(struct timeval *d, int secs);
 void timeval_minus(struct timeval *d,
                    const struct timeval *s1, const struct timeval *s2);
+static int reopen_logfile(void);
+static int daemonise();
+
 
 static int
 time_broken(int nowsecs)
@@ -242,6 +247,19 @@ main(int argc, char **argv)
             lease_dir = argv[i];
             i++;
 #endif
+        } else if(strcmp(argv[i], "-D") == 0) {
+            do_daemonise = 1;
+            i++;
+        } else if(strcmp(argv[i], "-L") == 0) {
+            i++;
+            if(i >= argc) goto usage;
+            logfile = argv[i];
+            i++;
+        } else if(strcmp(argv[i], "-I") == 0) {
+            i++;
+            if(i >= argc) goto usage;
+            pidfile = argv[i];
+            i++;
         } else {
             goto usage;
         }
@@ -285,6 +303,64 @@ main(int argc, char **argv)
         close(fd);
     }
 
+    if(do_daemonise) {
+        if(logfile == NULL)
+            logfile = "/var/log/ahcpd.log";
+    }
+
+    rc = reopen_logfile();
+    if(rc < 0) {
+        perror("reopen_logfile()");
+        exit(1);
+    }
+
+    fd = open("/dev/null", O_RDONLY);
+    if(fd < 0) {
+        perror("open(null)");
+        exit(1);
+    }
+
+    rc = dup2(fd, 0);
+    if(rc < 0) {
+        perror("dup2(null, 0)");
+        exit(1);
+    }
+
+    close(fd);
+
+    if(do_daemonise) {
+        rc = daemonise();
+        if(rc < 0) {
+            perror("daemonise");
+            exit(1);
+        }
+    }
+
+    if(pidfile) {
+        int pfd, len;
+        char buf[100];
+
+        len = snprintf(buf, 100, "%lu", (unsigned long)getpid());
+        if(len < 0 || len >= 100) {
+            perror("snprintf(getpid)");
+            exit(1);
+        }
+
+        pfd = open(pidfile, O_WRONLY | O_CREAT | O_EXCL, 0644);
+        if(pfd < 0) {
+            perror("creat(pidfile)");
+            exit(1);
+        }
+
+        rc = write(pfd, buf, len);
+        if(rc < len) {
+            perror("write(pidfile)");
+            goto fail;
+        }
+
+        close(pfd);
+    }
+
     gettimeofday(&now, NULL);
 
     if(time_broken(now.tv_sec))
@@ -299,7 +375,7 @@ main(int argc, char **argv)
         rc = read(fd, &seed, sizeof(unsigned int));
         if(rc < sizeof(unsigned int)) {
             perror("read(random)");
-            exit(1);
+            goto fail;
         }
         close(fd);
     }
@@ -321,7 +397,7 @@ main(int argc, char **argv)
     rc = read(fd, unique_id, 16);
     if(rc != 16) {
         perror("read(random)");
-        exit(1);
+        goto fail;
     }
     close(fd);
 
@@ -343,19 +419,19 @@ main(int argc, char **argv)
     if(lease_dir) {
         if(time_broken(now.tv_sec)) {
             fprintf(stderr, "Cannot run stateful server with broken clock.\n");
-            exit(1);
+            goto fail;
         }
         rc = lease_init(lease_dir, lease_first, lease_last);
         if(rc < 0) {
             fprintf(stderr, "Couldn't initialise lease database.\n");
-            exit(1);
+            goto fail;
         }
     }
 
     protocol_socket = ahcp_socket(port);
     if(protocol_socket < 0) {
         perror("ahcp_socket");
-        exit(1);
+        goto fail;
     }
 
     for(i = 0; i < numnetworks; i++) {
@@ -899,9 +975,11 @@ main(int argc, char **argv)
         rc = unaccept_data(interfaces, dummy);
         if(rc < 0) {
             fprintf(stderr, "Couldn't unconfigure!\n");
-            exit(1);
+            goto fail;
         }
     }
+    if(pidfile)
+        unlink(pidfile);
     return 0;
 
  usage:
@@ -909,11 +987,17 @@ main(int argc, char **argv)
             "Syntax: ahcpd "
             "[-m group] [-p port] [-a authority_file] [-e expires] [-n] [-N]\n"
             "              "
-            "[-i file] [-c script] [-s] "
+            "[-i file] [-c script] [-s] [-D] [-I pidfile] [-L logfile]\n"
+            "              "
 #ifndef NO_STATEFUL_SERVER
             "[-S first last dir] "
 #endif
             "interface...\n");
+    exit(1);
+
+ fail:
+    if(pidfile)
+        unlink(pidfile);
     exit(1);
 }
 
@@ -1124,4 +1208,55 @@ timeval_min_sec(struct timeval *d, int secs)
         d->tv_sec = secs;
         d->tv_usec = random() % 1000000;
     }
+}
+
+static int
+reopen_logfile()
+{
+    int lfd, rc;
+
+    if(logfile == NULL)
+        return 0;
+
+    lfd = open(logfile, O_CREAT | O_WRONLY | O_APPEND, 0644);
+    if(lfd < 0)
+        return -1;
+
+    fflush(stdout);
+    fflush(stderr);
+
+    rc = dup2(lfd, 1);
+    if(rc < 0)
+        return -1;
+
+    rc = dup2(lfd, 2);
+    if(rc < 0)
+        return -1;
+
+    if(lfd > 2)
+        close(lfd);
+
+    return 1;
+}
+
+static int
+daemonise()
+{
+    int rc;
+
+    fflush(stdout);
+    fflush(stderr);
+
+    rc = fork();
+    if(rc < 0)
+        return -1;
+
+    if(rc > 0)
+        exit(0);
+
+    rc = setsid();
+    if(rc < 0)
+        return -1;
+
+    return 1;
 }
