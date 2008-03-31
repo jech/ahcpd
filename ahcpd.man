@@ -122,7 +122,7 @@ protocol.
 Dump ahcpd's status to standard output or to the log file.
 .TP
 .B SIGUSR2
-Reopen the log file.
+Check all interfaces, then reopen the log file.
 .SH SEE ALSO
 .BR dhcpcd (8),
 .BR dhclient (8),
