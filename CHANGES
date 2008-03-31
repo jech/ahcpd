@@ -3,6 +3,7 @@ ahcpd 0.5 (unreleased):
   * Made ahcpd gracefully survive interfaces going up/down or being
     renumbered, as usually happens when tunnels or VPNs are started or
     stopped.
+  * Implemented the ability to run as a daemon.
 
 17 February 2008: ahcpd 0.4
 
