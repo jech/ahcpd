@@ -531,6 +531,9 @@ main(int argc, char **argv)
         }
 
         if(changed) {
+            for(i = 0; i < numnetworks; i++)
+                check_network(&networks[i]);
+            set_timeout(-1, CHECK_NETWORKS, 30000, 1);
             rc = reopen_logfile();
             if(rc < 0) {
                 perror("reopen_logfile");
