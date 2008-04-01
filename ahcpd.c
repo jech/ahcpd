@@ -96,6 +96,7 @@ static void set_timeout(int i, int which,
                         int msecs, int override);
 static int time_broken(int nowsecs);
 static int valid(int nowsecs, int origin, int expires, int age);
+static void setup_stateful_request(int up);
 static int check_network(struct network *net);
 int ahcp_socket(int port);
 int ahcp_recv(int s, void *buf, int buflen, struct sockaddr *sin, int slen);
@@ -401,11 +402,8 @@ main(int argc, char **argv)
     init_signals();
 
     if(authority) {
-        if(!nostate && stateful_servers_len >= 16) {
-            current_stateful_server = 0;
-            set_timeout(-1, STATEFUL_REQUEST, STATEFUL_REQUEST_DELAY, 1);
-            stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
-        }
+        if(!nostate && stateful_servers_len >= 16)
+            setup_stateful_request(1);
     }
 
     set_timeout(-1, CHECK_NETWORKS, 30000, 1);
@@ -628,16 +626,8 @@ main(int argc, char **argv)
                             /* Different from what we had, flood it further */
                             set_timeout(-1, REPLY, 3000, 0);
                         }
-                        if(!nostate && stateful_servers_len >= 16) {
-                            current_stateful_server = 0;
-                            set_timeout(-1, STATEFUL_REQUEST,
-                                        STATEFUL_REQUEST_DELAY, 1);
-                            stateful_request_timeout =
-                                INITIAL_STATEFUL_REQUEST_TIMEOUT;
-                        } else {
-                            current_stateful_server = -1;
-                            set_timeout(-1, STATEFUL_REQUEST, -1, 1);
-                        }
+                        setup_stateful_request(!nostate &&
+                                               stateful_servers_len >= 16);
                     }
                 }
             } else if(buf[2] == AHCP_STATEFUL_REQUEST ||
@@ -793,16 +783,13 @@ main(int argc, char **argv)
                 if(ipv4_address[0] != 0) {
                     selected_stateful_server = -1;
                     unaccept_stateful_data(interfaces);
-                    set_timeout(-1, STATEFUL_REQUEST, STATEFUL_REQUEST_DELAY, 1);
                     set_timeout(-1, STATEFUL_EXPIRE, -1, 1);
-                    stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
                 }
-                current_stateful_server = -1;
+                setup_stateful_request(0);
                 unaccept_data(interfaces, dummy);
                 data_expires = data_origin = data_age_origin = 0;
                 query_timeout = INITIAL_QUERY_TIMEOUT;
                 set_timeout(-1, QUERY, query_timeout, 0);
-                set_timeout(-1, STATEFUL_REQUEST, -1, 1);
             } else if(valid_for <= 50) {
                 /* Our data is going to expire soon */
                 if(debug_level >= 2)
@@ -998,7 +985,6 @@ main(int argc, char **argv)
                 perror("ahcp_send");
             }
         }
-        current_stateful_server = -1;
         rc = unaccept_data(interfaces, dummy);
         if(rc < 0) {
             fprintf(stderr, "Couldn't unconfigure!\n");
@@ -1080,6 +1066,19 @@ valid(int nowsecs, int origin, int expires, int age)
     if(nowsecs >= expires)
         return 0;
     return MIN(expires - origin - age, expires - nowsecs);
+}
+
+static void
+setup_stateful_request(int up)
+{
+    if(up) {
+        current_stateful_server = 0;
+        set_timeout(-1, STATEFUL_REQUEST, STATEFUL_REQUEST_DELAY, 1);
+    } else {
+        current_stateful_server = -1;
+        set_timeout(-1, STATEFUL_REQUEST, -1, 1);
+    }
+    stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
 }
 
 static int
