@@ -48,6 +48,13 @@ THE SOFTWARE.
 #define STATEFUL_EXPIRE 3
 #define CHECK_NETWORKS 4
 
+#define QUERY_DELAY 1000
+#define INITIAL_QUERY_TIMEOUT 2000
+#define MAX_QUERY_TIMEOUT 30000
+#define STATEFUL_REQUEST_DELAY 8000
+#define INITIAL_STATEFUL_REQUEST_TIMEOUT 2000
+#define MAX_STATEFUL_REQUEST_TIMEOUT 60000
+
 struct timeval now;
 const struct timeval zero = {0, 0};
 
@@ -79,6 +86,10 @@ char *interfaces[MAXNETWORKS + 1];
 struct timeval check_networks_time = {0, 0};
 struct timeval stateful_request_time = {0, 0};
 struct timeval stateful_expire_time = {0, 0};
+
+static int stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
+static int selected_stateful_server = -1;
+static int current_stateful_server = -1;
 
 static void init_signals(void);
 static void set_timeout(int i, int which,
@@ -114,13 +125,6 @@ valid(int nowsecs, int origin, int expires, int age)
         return 0;
     return MIN(expires - origin - age, expires - nowsecs);
 }
-
-#define QUERY_DELAY 1000
-#define INITIAL_QUERY_TIMEOUT 2000
-#define MAX_QUERY_TIMEOUT 30000
-#define STATEFUL_REQUEST_DELAY 8000
-#define INITIAL_STATEFUL_REQUEST_TIMEOUT 2000
-#define MAX_STATEFUL_REQUEST_TIMEOUT 60000
 
 static int
 check_network(struct network *net)
@@ -167,11 +171,8 @@ main(int argc, char **argv)
     int dummy = 0;
     int expires_delay = 3600;
     int query_timeout = INITIAL_QUERY_TIMEOUT;
-    int stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
     char *lease_dir = NULL;
     unsigned int lease_first = 0, lease_last = 0;
-    int selected_stateful_server = -1;
-    int current_stateful_server = -1;
 
     i = 1;
     while(i < argc && argv[i][0] == '-') {
