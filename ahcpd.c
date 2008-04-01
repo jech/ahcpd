@@ -97,6 +97,7 @@ static void set_timeout(int i, int which,
 static int time_broken(int nowsecs);
 static int valid(int nowsecs, int origin, int expires, int age);
 static void setup_stateful_request(int up);
+static void timeout_stateful_request(void);
 static int check_network(struct network *net);
 int ahcp_socket(int port);
 int ahcp_recv(int s, void *buf, int buflen, struct sockaddr *sin, int slen);
@@ -928,13 +929,7 @@ main(int argc, char **argv)
                     set_timeout(-1, CHECK_NETWORKS, 0, 0);
                 perror("ahcp_send");
             }
-            stateful_request_timeout = 2 * stateful_request_timeout;
-            if(stateful_request_timeout > MAX_STATEFUL_REQUEST_TIMEOUT) {
-                current_stateful_server =
-                    current_stateful_server % (stateful_servers_len / 16);
-                stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
-            }
-            set_timeout(-1, STATEFUL_REQUEST, stateful_request_timeout, 1);
+            timeout_stateful_request();
         }
 
         if(stateful_expire_time.tv_sec > 0 &&
@@ -1079,6 +1074,18 @@ setup_stateful_request(int up)
         set_timeout(-1, STATEFUL_REQUEST, -1, 1);
     }
     stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
+}
+
+static void
+timeout_stateful_request(void)
+{
+    stateful_request_timeout = 2 * stateful_request_timeout;
+    if(stateful_request_timeout > MAX_STATEFUL_REQUEST_TIMEOUT) {
+        current_stateful_server =
+            current_stateful_server % (stateful_servers_len / 16);
+        stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
+    }
+    set_timeout(-1, STATEFUL_REQUEST, stateful_request_timeout, 1);
 }
 
 static int
