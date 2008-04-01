@@ -994,7 +994,7 @@ main(int argc, char **argv)
     }
 
     if(config_data) {
-        if(ipv4_address[0] != 0) {
+        if(ipv4_address[0] != 0 && selected_stateful_server >= 0) {
             unsigned short sixteen = htons(16);
             buf[0] = 43;
             buf[1] = 0;
@@ -1008,10 +1008,12 @@ main(int argc, char **argv)
                                      NULL : ipv4_address);
             memset(&sin6, 0, sizeof(sin6));
             sin6.sin6_family = AF_INET6;
-            memcpy(&sin6.sin6_addr, stateful_servers, 16);
+            memcpy(&sin6.sin6_addr,
+                   stateful_servers + 16 * selected_stateful_server,
+                   16);
             sin6.sin6_port = htons(port);
             if(debug_level >= 2)
-                printf("Sending stateful request.\n");
+                printf("Sending stateful release.\n");
             rc = ahcp_send(protocol_socket, buf, 24 + rc,
                            (struct sockaddr*)&sin6, sizeof(sin6));
             if(rc < 0) {
