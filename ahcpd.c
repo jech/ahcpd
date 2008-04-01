@@ -984,6 +984,8 @@ main(int argc, char **argv)
 
         if(stateful_expire_time.tv_sec > 0 &&
            timeval_compare(&stateful_expire_time, &now) <= 0) {
+            if(debug_level >= 2)
+                printf("Stateful data expired.\n");
             selected_stateful_server = -1;
             unaccept_stateful_data(interfaces);
             set_timeout(-1, STATEFUL_REQUEST, STATEFUL_REQUEST_DELAY, 1);
