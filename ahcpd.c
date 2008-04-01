@@ -834,6 +834,13 @@ main(int argc, char **argv)
                 /* Our data expired */
                 if(debug_level >= 2)
                     printf("AHCP data expired.\n");
+                if(ipv4_address[0] != 0) {
+                    selected_stateful_server = -1;
+                    unaccept_stateful_data(interfaces);
+                    set_timeout(-1, STATEFUL_REQUEST, STATEFUL_REQUEST_DELAY, 1);
+                    set_timeout(-1, STATEFUL_EXPIRE, -1, 1);
+                    stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
+                }
                 unaccept_data(interfaces, dummy);
                 data_expires = data_origin = data_age_origin = 0;
                 query_timeout = INITIAL_QUERY_TIMEOUT;
