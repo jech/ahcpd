@@ -90,6 +90,7 @@ struct timeval stateful_expire_time = {0, 0};
 static int stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
 static int selected_stateful_server = -1;
 static int current_stateful_server = -1;
+static int stateful_first_time = 1;
 
 static void init_signals(void);
 static void set_timeout(int i, int which,
@@ -1073,6 +1074,7 @@ setup_stateful_request(int up)
         current_stateful_server = -1;
         set_timeout(-1, STATEFUL_REQUEST, -1, 1);
     }
+    stateful_first_time = 1;
     stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
 }
 
@@ -1081,9 +1083,15 @@ timeout_stateful_request(void)
 {
     stateful_request_timeout = 2 * stateful_request_timeout;
     if(stateful_request_timeout > MAX_STATEFUL_REQUEST_TIMEOUT) {
-        current_stateful_server =
-            current_stateful_server % (stateful_servers_len / 16);
-        stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
+        current_stateful_server++;
+        if(current_stateful_server >= (stateful_servers_len / 16)) {
+           current_stateful_server = 0;
+           stateful_first_time = 0;
+        }
+        if(stateful_first_time)
+            stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
+        else
+            stateful_request_timeout = MAX_STATEFUL_REQUEST_TIMEOUT / 3;
     }
     set_timeout(-1, STATEFUL_REQUEST, stateful_request_timeout, 1);
 }
