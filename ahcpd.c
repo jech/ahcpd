@@ -941,12 +941,18 @@ main(int argc, char **argv)
             unsigned short lease_time = htons(30 * 60);
             unsigned short sixteen = htons(16);
             int rc;
+            int server;
 
             if(stateful_servers_len < 16) {
                 fprintf(stderr,
                         "Trying to send stateful query with no servers.\n");
                 continue;
             }
+
+            if(selected_stateful_server >= 0)
+                server = selected_stateful_server;
+            else
+                server = 0;
 
             buf[0] = 43;
             buf[1] = 0;
@@ -960,7 +966,7 @@ main(int argc, char **argv)
                                      NULL : ipv4_address);
             memset(&sin6, 0, sizeof(sin6));
             sin6.sin6_family = AF_INET6;
-            memcpy(&sin6.sin6_addr, stateful_servers, 16);
+            memcpy(&sin6.sin6_addr, stateful_servers + 16 * server, 16);
             sin6.sin6_port = htons(port);
             if(debug_level >= 2)
                 printf("Sending stateful request.\n");
