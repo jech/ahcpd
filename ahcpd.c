@@ -125,7 +125,11 @@ main(int argc, char **argv)
     int dummy = 0;
     int expires_delay = 3600;
     int query_timeout = INITIAL_QUERY_TIMEOUT;
+#ifdef NO_STATEFUL_SERVER
+    const char *lease_dir = NULL;
+#else
     char *lease_dir = NULL;
+#endif
     unsigned int lease_first = 0, lease_last = 0;
 
     i = 1;
@@ -666,7 +670,6 @@ main(int argc, char **argv)
                                     suggested_ipv4[0] == 0 ?
                                     NULL : suggested_ipv4,
                                     ipv4, &lease_time);
-
                     buf[0] = 43;
                     buf[1] = 0;
                     if(rc < 0) {
