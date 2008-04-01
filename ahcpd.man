@@ -73,7 +73,7 @@ Daemonise at startup.
 .BI \-L " logfile"
 Specify a file to log random ``how do you do?'' messages to.  This
 defaults to standard error if not daemonising, and to
-.B /var/log/babel.log
+.B /var/log/ahcpd.log
 otherwise.
 .TP
 .BI \-I " pidfile"
