@@ -171,6 +171,7 @@ main(int argc, char **argv)
     char *lease_dir = NULL;
     unsigned int lease_first = 0, lease_last = 0;
     int selected_stateful_server = -1;
+    int current_stateful_server = -1;
 
     i = 1;
     while(i < argc && argv[i][0] == '-') {
@@ -449,6 +450,7 @@ main(int argc, char **argv)
 
     if(authority) {
         if(!nostate && stateful_servers_len >= 16) {
+            current_stateful_server = 0;
             set_timeout(-1, STATEFUL_REQUEST, STATEFUL_REQUEST_DELAY, 1);
             stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
         }
@@ -675,11 +677,13 @@ main(int argc, char **argv)
                             set_timeout(-1, REPLY, 3000, 0);
                         }
                         if(!nostate && stateful_servers_len >= 16) {
+                            current_stateful_server = 0;
                             set_timeout(-1, STATEFUL_REQUEST,
                                         STATEFUL_REQUEST_DELAY, 1);
                             stateful_request_timeout =
                                 INITIAL_STATEFUL_REQUEST_TIMEOUT;
                         } else {
+                            current_stateful_server = -1;
                             set_timeout(-1, STATEFUL_REQUEST, -1, 1);
                         }
                     }
@@ -841,6 +845,7 @@ main(int argc, char **argv)
                     set_timeout(-1, STATEFUL_EXPIRE, -1, 1);
                     stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
                 }
+                current_stateful_server = -1;
                 unaccept_data(interfaces, dummy);
                 data_expires = data_origin = data_age_origin = 0;
                 query_timeout = INITIAL_QUERY_TIMEOUT;
@@ -948,18 +953,18 @@ main(int argc, char **argv)
             unsigned short lease_time = htons(30 * 60);
             unsigned short sixteen = htons(16);
             int rc;
-            int server;
+            int server = -1;
 
-            if(stateful_servers_len < 16) {
+            if(selected_stateful_server >= 0)
+                server = selected_stateful_server;
+            else if(current_stateful_server >= 0)
+                server = current_stateful_server;
+
+            if(server < 0 || server >= stateful_servers_len / 16) {
                 fprintf(stderr,
                         "Trying to send stateful query with no servers.\n");
                 continue;
             }
-
-            if(selected_stateful_server >= 0)
-                server = selected_stateful_server;
-            else
-                server = 0;
 
             buf[0] = 43;
             buf[1] = 0;
@@ -984,8 +989,12 @@ main(int argc, char **argv)
                     set_timeout(-1, CHECK_NETWORKS, 0, 0);
                 perror("ahcp_send");
             }
-            stateful_request_timeout = MIN(2 * stateful_request_timeout,
-                                           MAX_STATEFUL_REQUEST_TIMEOUT);
+            stateful_request_timeout = 2 * stateful_request_timeout;
+            if(stateful_request_timeout > MAX_STATEFUL_REQUEST_TIMEOUT) {
+                current_stateful_server =
+                    current_stateful_server % (stateful_servers_len / 16);
+                stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
+            }
             set_timeout(-1, STATEFUL_REQUEST, stateful_request_timeout, 1);
         }
 
@@ -1037,6 +1046,7 @@ main(int argc, char **argv)
                 perror("ahcp_send");
             }
         }
+        current_stateful_server = -1;
         rc = unaccept_data(interfaces, dummy);
         if(rc < 0) {
             fprintf(stderr, "Couldn't unconfigure!\n");
