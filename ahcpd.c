@@ -170,6 +170,7 @@ main(int argc, char **argv)
     int stateful_request_timeout = INITIAL_STATEFUL_REQUEST_TIMEOUT;
     char *lease_dir = NULL;
     unsigned int lease_first = 0, lease_last = 0;
+    int selected_stateful_server = -1;
 
     i = 1;
     while(i < argc && argv[i][0] == '-') {
@@ -798,9 +799,11 @@ main(int argc, char **argv)
                     if(lease_time < 4)
                         continue;
 
+                    selected_stateful_server = -1;
                     rc = accept_stateful_data(data, dlen, lease_time,
                                               interfaces);
                     if(rc >= 0) {
+                        selected_stateful_server = 0;
                         set_timeout(-1, STATEFUL_EXPIRE, lease_time * 1000, 1);
                         set_timeout(-1, STATEFUL_REQUEST,
                                     MIN(lease_time * 2000 / 3, 60 * 60 * 1000),
@@ -975,6 +978,7 @@ main(int argc, char **argv)
 
         if(stateful_expire_time.tv_sec > 0 &&
            timeval_compare(&stateful_expire_time, &now) <= 0) {
+            selected_stateful_server = -1;
             unaccept_stateful_data(interfaces);
             set_timeout(-1, STATEFUL_REQUEST, STATEFUL_REQUEST_DELAY, 1);
             set_timeout(-1, STATEFUL_EXPIRE, -1, 1);
