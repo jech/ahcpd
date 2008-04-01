@@ -764,13 +764,23 @@ main(int argc, char **argv)
                       buf[2] == AHCP_STATEFUL_NAK) {
                 unsigned short lease_time, ulen, dlen;
                 unsigned char *data, *uid;
+                int i, found = 0;
 
                 rc = parse_stateful_packet(buf, rc,
                                            &lease_time, &uid, &ulen,
                                            &data, &dlen);
 
-                if(nostate || stateful_servers_len < 16 ||
-                   memcmp(stateful_servers, &sin6.sin6_addr, 16) != 0) {
+                if(!nostate) {
+                    for(i = 0; i < stateful_servers_len / 16; i++) {
+                        if(memcmp(stateful_servers + i * 16,
+                                  &sin6.sin6_addr, 16) == 0) {
+                            found = 1;
+                            break;
+                        }
+                    }
+                }
+
+                if(!found) {
                     fprintf(stderr, "Received unexpected stateful reply.\n");
                     continue;
                 }
