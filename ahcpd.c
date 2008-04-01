@@ -759,15 +759,11 @@ main(int argc, char **argv)
                         stateful_request_timeout =
                             INITIAL_STATEFUL_REQUEST_TIMEOUT;
                     } else {
-                        set_timeout(-1, STATEFUL_REQUEST,
-                                    MAX_STATEFUL_REQUEST_TIMEOUT, 1);
-                        stateful_request_timeout = MAX_STATEFUL_REQUEST_TIMEOUT;
+                        timeout_stateful_request(1);
                     }
                 } else {
                     /* NAK */
-                    set_timeout(-1, STATEFUL_REQUEST,
-                                MAX_STATEFUL_REQUEST_TIMEOUT, 1);
-                    stateful_request_timeout = MAX_STATEFUL_REQUEST_TIMEOUT;
+                    timeout_stateful_request(1);
                 }
             } else {
                 fprintf(stderr, "Unknown message type %d\n", buf[2]);
