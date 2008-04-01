@@ -475,7 +475,7 @@ main(int argc, char **argv)
                 printf("No stateless data.\n");
             }
             if(ipv4_address[0] != 0)
-                printf("Stateful data, valid for %d seconds.\n",
+                printf("Stateful data valid for %d seconds.\n",
                        (int)(stateful_expire_time.tv_sec - now.tv_sec));
             else
                 printf("No stateful data.\n");
