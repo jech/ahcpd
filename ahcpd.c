@@ -94,6 +94,9 @@ static int current_stateful_server = -1;
 static void init_signals(void);
 static void set_timeout(int i, int which,
                         int msecs, int override);
+static int time_broken(int nowsecs);
+static int valid(int nowsecs, int origin, int expires, int age);
+static int check_network(struct network *net);
 int ahcp_socket(int port);
 int ahcp_recv(int s, void *buf, int buflen, struct sockaddr *sin, int slen);
 int ahcp_send(int s,
@@ -107,58 +110,6 @@ void timeval_minus(struct timeval *d,
 static int reopen_logfile(void);
 static int daemonise();
 
-
-static int
-time_broken(int nowsecs)
-{
-    return nowsecs < 1200000000;
-}
-
-static int
-valid(int nowsecs, int origin, int expires, int age)
-{
-    if(age >= expires - origin)
-        return 0;
-    if(time_broken(nowsecs))
-        return expires - origin - age;
-    if(nowsecs >= expires)
-        return 0;
-    return MIN(expires - origin - age, expires - nowsecs);
-}
-
-static int
-check_network(struct network *net)
-{
-    int ifindex, rc;
-    struct ipv6_mreq mreq;
-
-    ifindex = if_nametoindex(net->ifname);
-    if(ifindex != net->ifindex) {
-        net->ifindex = ifindex;
-        if(net->ifindex > 0) {
-            memset(&mreq, 0, sizeof(mreq));
-            memcpy(&mreq.ipv6mr_multiaddr, &protocol_group, 16);
-            mreq.ipv6mr_interface = net->ifindex;
-            rc = setsockopt(protocol_socket, IPPROTO_IPV6, IPV6_JOIN_GROUP,
-                            (char*)&mreq, sizeof(mreq));
-            if(rc < 0) {
-                perror("setsockopt(IPV6_JOIN_GROUP)");
-                net->ifindex = 0;
-                goto fail;
-            }
-            if(authority) {
-                set_timeout(-1, QUERY, -1, 1);
-                set_timeout(-1, REPLY, 5000, 1);
-            } else {
-                set_timeout(-1, QUERY, QUERY_DELAY, 1);
-                set_timeout(-1, REPLY, -1, 1);
-            }
-            return 1;
-        }
-    }
- fail:
-    return 0;
-}
 
 int
 main(int argc, char **argv)
@@ -1111,6 +1062,58 @@ set_timeout(int net, int which, int msecs, int override)
             }
         }
     }
+}
+
+static int
+time_broken(int nowsecs)
+{
+    return nowsecs < 1200000000;
+}
+
+static int
+valid(int nowsecs, int origin, int expires, int age)
+{
+    if(age >= expires - origin)
+        return 0;
+    if(time_broken(nowsecs))
+        return expires - origin - age;
+    if(nowsecs >= expires)
+        return 0;
+    return MIN(expires - origin - age, expires - nowsecs);
+}
+
+static int
+check_network(struct network *net)
+{
+    int ifindex, rc;
+    struct ipv6_mreq mreq;
+
+    ifindex = if_nametoindex(net->ifname);
+    if(ifindex != net->ifindex) {
+        net->ifindex = ifindex;
+        if(net->ifindex > 0) {
+            memset(&mreq, 0, sizeof(mreq));
+            memcpy(&mreq.ipv6mr_multiaddr, &protocol_group, 16);
+            mreq.ipv6mr_interface = net->ifindex;
+            rc = setsockopt(protocol_socket, IPPROTO_IPV6, IPV6_JOIN_GROUP,
+                            (char*)&mreq, sizeof(mreq));
+            if(rc < 0) {
+                perror("setsockopt(IPV6_JOIN_GROUP)");
+                net->ifindex = 0;
+                goto fail;
+            }
+            if(authority) {
+                set_timeout(-1, QUERY, -1, 1);
+                set_timeout(-1, REPLY, 5000, 1);
+            } else {
+                set_timeout(-1, QUERY, QUERY_DELAY, 1);
+                set_timeout(-1, REPLY, -1, 1);
+            }
+            return 1;
+        }
+    }
+ fail:
+    return 0;
 }
 
 static void
