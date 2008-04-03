@@ -1222,6 +1222,14 @@ ahcp_socket(int port)
     if(rc < 0)
         goto fail;
 
+    rc = fcntl(s, F_GETFD, 0);
+    if(rc < 0)
+        goto fail;
+
+    rc = fcntl(s, F_SETFD, rc | FD_CLOEXEC);
+    if(rc < 0)
+        goto fail;
+
     rc = fcntl(s, F_GETFL, 0);
     if(rc < 0)
         goto fail;
