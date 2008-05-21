@@ -39,7 +39,10 @@ Participate in the flooding protocol, but don't actually perform any
 configuration.
 .TP
 .B \-N
-Don't configure DNS.
+Do not configure DNS.
+.TP
+.B \-r
+Do not start the routing daemon.
 .TP
 .BI \-c " config-script"
 Use the given configuration script instead of
