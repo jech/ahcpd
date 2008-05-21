@@ -246,27 +246,6 @@ main(int argc, char **argv)
     if(rc <= 0)
         goto usage;
 
-    if(authority) {
-        fd = open(authority, O_RDONLY);
-        if(fd < 0) {
-            perror("open(authority)");
-            exit(1);
-        }
-        rc = read(fd, buf, BUFFER_SIZE);
-        if(rc < 0) {
-            perror("read(authority)");
-            exit(1);
-        }
-
-        rc = accept_data(buf, rc, interfaces, dummy);
-        if(rc < 0) {
-            fprintf(stderr, "Couldn't configure from authority data.\n");
-            exit(1);
-        }
-
-        close(fd);
-    }
-
     if(do_daemonise) {
         if(logfile == NULL)
             logfile = "/var/log/ahcpd.log";
@@ -298,6 +277,27 @@ main(int argc, char **argv)
             perror("daemonise");
             exit(1);
         }
+    }
+
+    if(authority) {
+        fd = open(authority, O_RDONLY);
+        if(fd < 0) {
+            perror("open(authority)");
+            exit(1);
+        }
+        rc = read(fd, buf, BUFFER_SIZE);
+        if(rc < 0) {
+            perror("read(authority)");
+            exit(1);
+        }
+
+        rc = accept_data(buf, rc, interfaces, dummy);
+        if(rc < 0) {
+            fprintf(stderr, "Couldn't configure from authority data.\n");
+            exit(1);
+        }
+
+        close(fd);
     }
 
     if(pidfile) {

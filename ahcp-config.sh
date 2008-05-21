@@ -6,7 +6,7 @@ die() {
 }
 
 findcmd() {
-    type "$1" &> /dev/null || \
+    type "$1" > /dev/null 2>&1 || \
         die "Couldn't find $1, please install ${2:-it} or fix your path."
 }
 
