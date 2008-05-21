@@ -5,6 +5,8 @@ ahcpd 0.5 (unreleased):
     stopped.
   * Implemented the ability to run as a daemon.
   * Implemented the ability to try multiple stateful servers.
+  * Implemented the flag -r, which prevents the routing protocol from
+    being started.
 
 17 February 2008: ahcpd 0.4
 
