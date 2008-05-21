@@ -195,15 +195,19 @@ EOF
     done
     add_addresses
     nameserver_start
-    olsrd -f "$conf_filename" -nofork &
-    echo $! > $olsrd_pidfile
+    if [ -z "${AHCP_DONT_START_ROUTING_PROTOCOL}" ] ; then
+        olsrd -f "$conf_filename" -nofork &
+        echo $! > $olsrd_pidfile
+    fi
 }
 
 stop_olsr() {
     conf_filename=/var/run/ahcp-olsrd-"$AHCP_DAEMON_PID".conf
 
-    kill $(cat "$olsrd_pidfile")
-    rm "$olsrd_pidfile"
+    if [ -z "${AHCP_DONT_START_ROUTING_PROTOCOL}" ] ; then
+        kill $(cat "$olsrd_pidfile")
+        rm "$olsrd_pidfile"
+    fi
 
     del_addresses
     rm "$conf_filename"
@@ -235,24 +239,35 @@ start_babel() {
         babel_debuglevel="$(expr $debuglevel - 2)"
     fi
 
-    babel -I $babel_pidfile -d $babel_debuglevel \
-          $multicast $port $hello $options \
-          $first_addr $interfaces $more_interfaces &
+    if [ -z "${AHCP_DONT_START_ROUTING_PROTOCOL}" ] ; then
+        babel -I $babel_pidfile -d $babel_debuglevel \
+            $multicast $port $hello $options \
+            $first_addr $interfaces $more_interfaces &
+    else
+        [ -e $babel_pidfile ] && kill -USR2 $(cat $babel_pidfile) || true
+    fi
     sleep 1
 }
 
 stop_babel() {
-    if [ -e "$babel_pidfile" ]; then
-        kill $(cat "$babel_pidfile")
-        sleep 1
-        [ -e "$babel_pidfile" ] && sleep 1
-        [ -e "$babel_pidfile" ] && sleep 1
-        [ -e "$babel_pidfile" ] && sleep 1
-        [ -e "$babel_pidfile" ] && sleep 1
-        [ -e "$babel_pidfile" ] && echo "Failed to kill Babel."
+    if [ -z "${AHCP_DONT_START_ROUTING_PROTOCOL}" ] ; then
+        if [ -e "$babel_pidfile" ]; then
+            kill $(cat "$babel_pidfile")
+            sleep 1
+            [ -e "$babel_pidfile" ] && sleep 1
+            [ -e "$babel_pidfile" ] && sleep 1
+            [ -e "$babel_pidfile" ] && sleep 1
+            [ -e "$babel_pidfile" ] && sleep 1
+            [ -e "$babel_pidfile" ] && echo "Failed to kill Babel."
+        fi
     fi
 
     del_address $first_if
+
+    if [ ! -z "${AHCP_DONT_START_ROUTING_PROTOCOL}" ] ; then
+        [ -e $babel_pidfile ] && kill -USR2 $(cat $babel_pidfile) || true
+    fi
+
     nameserver_stop
 }
 
