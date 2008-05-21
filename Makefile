@@ -34,21 +34,25 @@ ahcp-generate.html: ahcp-generate.man
 
 ahcp-generate-address.html: ahcp-generate-address.man
 
-.PHONY: install
+.PHONY: install.minimal install
 
-install: all
-	-rm -f $(TARGET)$(PREFIX)/bin/ahcpd $(TARGET)$(PREFIX)/bin/ahcp-generate-address
+install.minimal: all
 	mkdir -p $(TARGET)$(PREFIX)/bin/
+	-rm -f $(TARGET)$(PREFIX)/bin/ahcpd $(TARGET)$(PREFIX)/bin/ahcp-generate-address
 	cp ahcpd ahcp-generate ahcp-generate-address $(TARGET)$(PREFIX)/bin/
 	chmod +x $(TARGET)$(PREFIX)/bin/ahcpd
 	chmod +x $(TARGET)$(PREFIX)/bin/ahcp-generate
-	chmod +x $(TARGET)$(PREFIX)/bin/ahcp-generate-address
 	-rm -f $(TARGET)$(PREFIX)/bin/ahcp-config.sh
 	cp ahcp-config.sh $(TARGET)$(PREFIX)/bin/
 	chmod +x $(TARGET)$(PREFIX)/bin/ahcp-config.sh
 	-rm -f $(TARGET)$(PREFIX)/bin/ahcp-dummy-config.sh
 	cp ahcp-dummy-config.sh $(TARGET)$(PREFIX)/bin/
 	chmod +x $(TARGET)$(PREFIX)/bin/ahcp-dummy-config.sh
+
+install: all install.minimal
+	-rm -f $(TARGET)$(PREFIX)/bin/ahcp-generate
+	cp ahcp-generate $(TARGET)$(PREFIX)/bin/
+	chmod +x $(TARGET)$(PREFIX)/bin/ahcp-generate-address
 	mkdir -p $(TARGET)$(PREFIX)/man/man8/
 	cp -f ahcpd.man $(TARGET)$(PREFIX)/man/man8/ahcpd.8
 	cp -f ahcp-generate.man $(TARGET)$(PREFIX)/man/man8/ahcp-generate.8
