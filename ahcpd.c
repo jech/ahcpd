@@ -66,7 +66,7 @@ unsigned char unique_id[16];
 char *unique_id_file = "/var/lib/ahcpd-unique-id";
 unsigned char buf[BUFFER_SIZE];
 unsigned int data_origin = 0, data_expires = 0, data_age_origin = 0;
-int nodns = 0, nostate = 0;
+int nodns = 0, nostate = 0, noroute = 0;
 char *config_script = "/usr/local/bin/ahcp-config.sh";
 int debug_level = 1;
 int do_daemonise = 0;
@@ -166,6 +166,9 @@ main(int argc, char **argv)
             i++;
         } else if(strcmp(argv[i], "-N") == 0) {
             nodns = 1;
+            i++;
+        } else if(strcmp(argv[i], "-r") == 0) {
+            noroute = 1;
             i++;
         } else if(strcmp(argv[i], "-s") == 0) {
             nostate = 1;

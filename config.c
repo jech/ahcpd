@@ -403,6 +403,9 @@ doit(const unsigned char *data, int len, unsigned char *ipv4,
             setenv("AHCP_IPv4_ADDRESS", buf, 1);
         }
 
+        if(noroute)
+            setenv("AHCP_DONT_START_ROUTING_PROTOCOL", "true", 1);
+
         if(debug_level >= 1)
             printf("Running ``%s %s''\n", config_script,
                    script_actions[what]);
