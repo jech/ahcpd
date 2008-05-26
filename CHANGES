@@ -1,4 +1,4 @@
-ahcpd 0.5 (unreleased):
+25 May 2008: ahcpd 0.5
 
   * Made ahcpd gracefully survive interfaces going up/down or being
     renumbered, as usually happens when tunnels or VPNs are started or
