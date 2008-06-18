@@ -41,13 +41,13 @@ choose one randomly for you:
 An AHCP configuration is a blob of binary data and is generated with
 ahcp-generate.  For example
 
-  $ ahcp-generate -p fde6:20f5:c9ac:358: -P babel -n fde6:20f5:c9ac:358:1 \
+  $ ahcp-generate -p fde6:20f5:c9ac:358:: -P babel -n fde6:20f5:c9ac:358::1 \
         > ahcp.dat
 
 If you intend to run a stateful AHCP server, you should add its address:
 
-  $ ahcp-generate -p fde6:20f5:c9ac:358: -P babel -n fde6:20f5:c9ac:358:1 \
-        -S fde6:20f5:c9ac:358:1 > ahcp.dat
+  $ ahcp-generate -p fde6:20f5:c9ac:358:: -P babel -n fde6:20f5:c9ac:358::1 \
+        -S fde6:20f5:c9ac:358::1 > ahcp.dat
 
 3. Configure an authoritative AHCP peer
 ---------------------------------------
