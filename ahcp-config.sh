@@ -242,7 +242,7 @@ start_babel() {
     if [ -z "${AHCP_DONT_START_ROUTING_PROTOCOL}" ] ; then
         babel -I $babel_pidfile -d $babel_debuglevel \
             $multicast $port $hello $options \
-            $first_addr $interfaces $more_interfaces &
+            $interfaces $more_interfaces &
     else
         [ -e $babel_pidfile ] && kill -USR2 $(cat $babel_pidfile) || true
     fi
