@@ -47,7 +47,7 @@ ahcp-generate.  For example
 If you intend to run a stateful AHCP server, you should add its address:
 
   $ ahcp-generate -p fde6:20f5:c9ac:358:: -P babel -n fde6:20f5:c9ac:358::1 \
-        -S fde6:20f5:c9ac:358::1 > ahcp.dat
+        -s fde6:20f5:c9ac:358::1 > ahcp.dat
 
 3. Configure an authoritative AHCP peer
 ---------------------------------------
@@ -124,9 +124,10 @@ the babel daemon by creating a file
 
   /etc/ahcp/ahcp-babel-options
 
-For example, on an Internet gateway this file will typically contain
+For example, you may specify the kernel priority of the routes installed by
+Babel by specifying something like
 
-  -x ::/0 128
+  -k 20
 
 You can also specify any interfaces that you want to participate in
 the Babel protocol but not the AHCP protocol by listing them in the file
