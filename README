@@ -1,13 +1,7 @@
 Ahcpd is a daemon for configuring an IPv6 network using the Ad-Hoc
 Configuration Protocol (AHCP).  AHCP is designed for wireless mesh
-networks, where IPv6 autoconfiguration and DHCP do not work, but may
-also be used on wired networks.
-
-AHCP autoconfiguration happens in two stages.  First, a block of
-stateless autoconfiguration data is flooded throughout the network;
-this contains enough information to set up IPv6 routing.  Then, AHCP
-peers contact a stateful AHCP server using IPv6 unicast in order to
-get the information necessary to configure IPv4 routing.
+networks, where DHCP and IPv6 autoconfiguration do not work, but could in
+principle also be used on wired networks.
 
 
 Installation
@@ -20,134 +14,50 @@ If compiling for OpenWRT, you will probably want to say something like
 
   $ make CC=mipsel-linux-gcc PLATFORM_DEFINES='-march=mips32'
 
+You can reduce the size of the ahcpd binary by omitting server
+functionality; to do so, specify
 
-Configuring a network to use AHCP
-*********************************
-
-1. Choose a network prefix
---------------------------
-
-You will need to choose a /64 network prefix for your AHCP network.
-If you have a spare native or 6to4 /64 prefix, use that.  If you
-don't, you can use the included utility `ahcp-generate-address'' to
-choose one randomly for you:
-
-  $ ahcp-generate-address -p -s -r
-  fde6:20f5:c9ac:358::
-
-2. Generate an AHCP configuration
----------------------------------
-
-An AHCP configuration is a blob of binary data and is generated with
-ahcp-generate.  For example
-
-  $ ahcp-generate -p fde6:20f5:c9ac:358:: -P babel -n fde6:20f5:c9ac:358::1 \
-        > ahcp.dat
-
-If you intend to run a stateful AHCP server, you should add its address:
-
-  $ ahcp-generate -p fde6:20f5:c9ac:358:: -P babel -n fde6:20f5:c9ac:358::1 \
-        -s fde6:20f5:c9ac:358::1 > ahcp.dat
-
-3. Configure an authoritative AHCP peer
----------------------------------------
-
-You will need to configure at least one host on your AHCP network to
-be an ``authoritative'' AHCP peer.  Multiple authoritative peers may
-be configured for redundancy; an AHCP network will survive the loss of
-all authoritative peers for no more than one hour by default (this
-can be changed with the ``-e'' flag to ahcpd).
-
-On each authoritative AHCP peer, run
-
-  # ahcpd -a /path/to/ahcp.dat eth1
-
-where eth1 is the interface on which you want the peer to participate
-in the AHCP protocol.  Multiple interfaces can be included, in which
-case the peer will provide AHCP configuration on all the interfaces.
-
-By default, the authoritative peers will be configured by AHCP just
-like the other ones.  You may want to keep the authoritative peers
-network configuration unchanged (for example because they use static
-routing); in that case, please see the use of the `-c' flag below.
-
-4. Set up an AHCP stateful server
----------------------------------
-
-The AHCP stateful server is responsible for giving out IPv4 addresses
-to clients.  It should run on a stable machine with a reliable disk,
-where it can store its lease database.
-
-  # mkdir /var/lib/ahcp-leases
-  # ahcpd -S 192.168.1.1 192.168.1.254 /var/lib/ahcp-leases eth0
-
-If the stateful server is also an authoritative peer, you should add
-the -a flag:
-
-  # ahcpd -a /path/to/ahcp.dat \
-          -S 192.168.1.1 192.168.1.254 /var/lib/ahcp-leases \
-          eth0
-
-5. Run AHCP on your other hosts
--------------------------------
-
-On each AHCP peer, run
-
-  # ahcpd eth1
-
-where eth1 is the interface on which you want your peer to participate
-in the AHCP protocol.  Multiple interfaces can be included, in which
-case the peer will forward configuration information between interfaces.
-
-6. Configuring non-standard peers
----------------------------------
-
-Some AHCP peers will need to use a non-standard configuration, for
-example because they are Internet gateways.  You can configure a peer
-manually, then tell ahcpd to not touch the network configuration by
-using the ``-c'' flag:
-
-  # ahcpd -c /path/to/dummy-config.sh eth1
-
-If you are using OLSR, you can request that ahcpd add sections to the
-olsrd configuration file by creating a file
-
-  /etc/ahcp/ahcp-olsrd.conf
-
-For example, on an Internet gateway this file will typically contain
-
-  Hna6 { :: 0 }
-  Willingness 6
-
-If you are using Babel, you can add random flags to the invocation of
-the babel daemon by creating a file
-
-  /etc/ahcp/ahcp-babel-options
-
-For example, you may specify the kernel priority of the routes installed by
-Babel by specifying something like
-
-  -k 20
-
-You can also specify any interfaces that you want to participate in
-the Babel protocol but not the AHCP protocol by listing them in the file
-
-  /etc/ahcp/ahcp-babel-interfaces
+  $ make EXTRA_DEFINES=-DNO_SERVER
 
 
-Extending AHCP
-**************
+Setting up a server
+*******************
 
-AHCP can currently only provide information to configure static
-routing and dynamic routing using either OLSR or Babel.  In addition,
-it is only able to carry a subset of possible configuration data
-(notably prefix information and DNS and NTP servers).
+You need to set up one or more authoritative servers in your network.  Your
+server should run something like
 
-However, AHCP was designed to be an extensible protocol, and could
-conceivably be extended to carry all sorts of static configuration
-information (i.e. information that does not depend on the host it is
-sent to).  Please contact me if you want to define additional AHCP
-options.
+  $ ahcpd -S fde6:20f5:c9ac:358::,192.168.4.128,192.168.4.254,/var/lib/leases \
+          wlan0
+
+where fde6:20f5:c9ac:358:: is your IPv6 prefix, 192.168.4.128 through
+192.168.4.254 is the range of IPv4 addresses you want to give out to
+clients, and /var/lib/leases is the location of the persistent lease
+database.
+
+If you want ahcpd to fork into the background, pass it the ``-D'' flag.
+The server does not need to run ahcpd as root, as long as it can write the
+lease database and the pidfile.
+
+The server should synchronise its clock using NTP.  If ahcpd doesn't detect
+time synchronisation, it will only give out leases for short periods of
+time, and will be extremely conservative about releasing them.  Note that
+ahcpd actually checks with the kernel for time synchronisation, so most
+SNTP clients will not do; you will most probably need Mills' implementation
+of NTP.
+
+For redundancy, you may set up multiple servers in a single network as long
+as they serve disjoint IPv4 address ranges.
+
+
+Setting up a client
+*******************
+
+Unlike the server, the client needs to run ahcpd as root.  Simply run
+something like
+
+  # ahcpd wlan0
+
+and you should get IPv4 and IPv6 addresses in a few seconds.
 
 
                                         Juliusz Chroboczek

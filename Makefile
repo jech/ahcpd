@@ -2,22 +2,18 @@ PREFIX = /usr/local
 
 CDEBUGFLAGS = -Os -g -Wall
 
-DEFINES = -DDEFAULT_CONFIG_SCRIPT='"$(PREFIX)/bin/ahcp-config.sh"' \
-	  $(PLATFORM_DEFINES)
+DEFINES = $(PLATFORM_DEFINES)
 
 CFLAGS = $(CDEBUGFLAGS) $(DEFINES) $(EXTRA_DEFINES)
 
-all: ahcpd ahcp-generate-address ahcp-generate
+SRCS = ahcpd.c monotonic.c transport.c config.c lease.c
 
-ahcpd: ahcpd.o message.o config.o lease.o
-	$(CC) $(CFLAGS) $(LDFLAGS) -o ahcpd \
-              ahcpd.o message.o config.o lease.o $(LDLIBS)
+OBJS = ahcpd.o monotonic.o transport.o config.o lease.o
 
-ahcp-generate: ahcp-generate.o
-	$(CC) $(CFLAGS) $(LDFLAGS) -o ahcp-generate ahcp-generate.o $(LDLIBS)
+LDLIBS = -lrt
 
-ahcp-generate-address: ahcp-generate-address.o
-	$(CC) $(CFLAGS) $(LDFLAGS) -o ahcp-generate-address ahcp-generate-address.o $(LDLIBS)
+ahcpd: $(OBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o ahcpd $(OBJS) $(LDLIBS)
 
 .SUFFIXES: .man .html
 
@@ -30,48 +26,34 @@ ahcp-generate-address: ahcp-generate-address.o
 
 ahcpd.html: ahcpd.man
 
-ahcp-generate.html: ahcp-generate.man
+.PHONY: all install.minimal install
 
-ahcp-generate-address.html: ahcp-generate-address.man
-
-.PHONY: install.minimal install
+all: ahcpd
 
 install.minimal: all
 	mkdir -p $(TARGET)$(PREFIX)/bin/
-	-rm -f $(TARGET)$(PREFIX)/bin/ahcpd $(TARGET)$(PREFIX)/bin/ahcp-generate-address
-	cp ahcpd ahcp-generate-address $(TARGET)$(PREFIX)/bin/
-	chmod +x $(TARGET)$(PREFIX)/bin/ahcpd $(TARGET)$(PREFIX)/bin/ahcp-generate-address
-	-rm -f $(TARGET)$(PREFIX)/bin/ahcp-config.sh
-	cp ahcp-config.sh $(TARGET)$(PREFIX)/bin/
-	chmod +x $(TARGET)$(PREFIX)/bin/ahcp-config.sh
-	-rm -f $(TARGET)$(PREFIX)/bin/ahcp-dummy-config.sh
-	cp ahcp-dummy-config.sh $(TARGET)$(PREFIX)/bin/
-	chmod +x $(TARGET)$(PREFIX)/bin/ahcp-dummy-config.sh
+	-rm -f $(TARGET)$(PREFIX)/bin/ahcpd
+	cp ahcpd $(TARGET)$(PREFIX)/bin/
+	mkdir -p /etc/ahcp/
+	-rm -f $(TARGET)/etc/ahcp/ahcp-config.sh
+	cp ahcp-config.sh $(TARGET)/etc/ahcp/
+	chmod +x $(TARGET)/etc/ahcp/ahcp-config.sh
 
 install: all install.minimal
-	-rm -f $(TARGET)$(PREFIX)/bin/ahcp-generate
-	cp ahcp-generate $(TARGET)$(PREFIX)/bin/
-	chmod +x $(TARGET)$(PREFIX)/bin/ahcp-generate
 	mkdir -p $(TARGET)$(PREFIX)/man/man8/
 	cp -f ahcpd.man $(TARGET)$(PREFIX)/man/man8/ahcpd.8
-	cp -f ahcp-generate.man $(TARGET)$(PREFIX)/man/man8/ahcp-generate.8
-	cp -f ahcp-generate-address.man $(TARGET)$(PREFIX)/man/man8/ahcp-generate-address.8
 
 .PHONY: uninstall
 
 uninstall:
 	-rm -f $(TARGET)$(PREFIX)/bin/ahcpd
-	-rm -f $(TARGET)$(PREFIX)/bin/ahcp-generate
-	-rm -f $(TARGET)$(PREFIX)/bin/ahcp-generate-address
 	-rm -f $(TARGET)$(PREFIX)/bin/ahcp-config.sh
 	-rm -f $(TARGET)$(PREFIX)/bin/ahcp-dummy-config.sh
 	-rm -f $(TARGET)$(PREFIX)/man/man8/ahcpd.8
-	-rm -f $(TARGET)$(PREFIX)/man/man8/ahcp-generate.8
-	-rm -f $(TARGET)$(PREFIX)/man/man8/ahcp-generate-address.8
 
 .PHONY: clean
 
 clean:
-	-rm -f ahcpd ahcp-generate ahcp-generate-address
+	-rm -f ahcpd
 	-rm -f *.o *~ core TAGS gmon.out
-	-rm -f ahcpd.thml ahcp-generate.html ahcp-generate-address.html
+	-rm -f ahcpd.html

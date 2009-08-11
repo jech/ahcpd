@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2008, 2009 by Juliusz Chroboczek
+Copyright (c) 2007-2009 by Juliusz Chroboczek
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,15 +20,31 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-#define MAX_LEASE_TIME (8 * 24 * 3600)
-#define MAX_RELATIVE_LEASE_TIME (4 * 3600 + 7)
+/* Opcodes */
 
-int lease_init(const char *dir,
-               const unsigned char *first, const unsigned char *last,
-               int debug);
-int take_lease(const unsigned char *client_id, int client_id_len,
-               const unsigned char *suggested_ipv4,
-               unsigned char *ipv4_return, unsigned *lease_time,
-               int commit);
-int release_lease(const unsigned char *client_id, int client_id_len,
-                  const unsigned char *ipv4);
+#define AHCP_DISCOVER 0
+#define AHCP_OFFER 1
+#define AHCP_REQUEST 2
+#define AHCP_ACK 3
+#define AHCP_NACK 4
+#define AHCP_RELEASE 5
+
+/* Options */
+
+#define OPT_PAD 0
+#define OPT_MANDATORY 1
+#define OPT_ORIGIN_TIME 2
+#define OPT_EXPIRES 3
+#define OPT_MY_IPv6_ADDRESS 4
+#define OPT_MY_IPv4_ADDRESS 5
+#define OPT_IPv6_PREFIX 6
+#define OPT_IPv4_PREFIX 7
+#define OPT_IPv6_ADDRESS 8
+#define OPT_IPv4_ADDRESS 9
+#define OPT_IPv6_PREFIX_DELEGATION 10
+#define OPT_IPv4_PREFIX_DELEGATION 11
+#define OPT_NAME_SERVER 12
+#define OPT_NTP_SERVER 13
+
+
+

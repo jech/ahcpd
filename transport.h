@@ -20,15 +20,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-#define MAX_LEASE_TIME (8 * 24 * 3600)
-#define MAX_RELATIVE_LEASE_TIME (4 * 3600 + 7)
+extern unsigned myseqno;
 
-int lease_init(const char *dir,
-               const unsigned char *first, const unsigned char *last,
-               int debug);
-int take_lease(const unsigned char *client_id, int client_id_len,
-               const unsigned char *suggested_ipv4,
-               unsigned char *ipv4_return, unsigned *lease_time,
-               int commit);
-int release_lease(const unsigned char *client_id, int client_id_len,
-                  const unsigned char *ipv4);
+int send_packet(struct sockaddr *sin, int sinlen,
+                const unsigned char *dest, int hopcount,
+                const unsigned char *buf, size_t bufsize);
+int handle_packet(int ll, const unsigned char *buf, size_t buflen);

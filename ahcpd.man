@@ -9,8 +9,8 @@ ahcpd \- ad-hoc configuration daemon
 ]
 .IR interface ...
 .SH DESCRIPTION
-AHCP is a configuration protocol for IPv6 networks.  It is designed to
-be used in place of router discovery and DHCPv6 on ad-hoc networks.
+AHCP is a configuration protocol that can replace DHCP on networks without
+transitive connectivity, such as mesh networks.
 .SH OPTIONS
 .TP
 .BI \-m " multicast-address"
@@ -19,34 +19,26 @@ Speficy the link-local multicast address to be used by AHCP.
 .BI \-p " port"
 Specify the UDP port number to be used by AHCP.
 .TP
-.BI \-a " authority-file"
-Run the daemon in authoritative mode, flooding data given in
-.IR authority-file .
-.I Authority-file
-may be generated with
-.BR ahcp-generate (8).
-.TP
-.BI \-e " expires"
-Set the time in seconds after which non-authoritative data will expire
-from the network; the network can survive in the absence of any
-authoritative peers for roughly that amount of time.  The default is
-3600, and can safely be increased.  This flag has no effect if
-.B \-a
-has not been set.
-.TP
 .B \-n
 Participate in the flooding protocol, but don't actually perform any
 configuration.
 .TP
+.B \-4
+Only attempt to configure IPv4 addresses.
+.TP
+.B \-4
+Only attempt to configure IPv6 addresses.
+.TP
 .B \-N
 Do not configure DNS.
 .TP
-.B \-r
-Do not start the routing daemon.
+.BI \-t " time"
+Specify the time, in seconds, for which leases are requested.  The default
+is slightly over one hour.
 .TP
-.BI \-c " config-script"
-Use the given configuration script instead of
-.BR /usr/local/bin/ahcp-config.sh .
+.BI \-s " script"
+Specify the configuration script to run.  The default is
+.BR /etc/ahcp/ahcp-config.sh .
 .TP
 .BI \-d " level"
 Set the debug level to
@@ -55,20 +47,26 @@ Set the debug level to
 .TP
 .BI \-i " filename"
 Specify the filename containing this host's unique id.  The default is
-.BR /var/lib/ahcp-unique-id .
+.BR /var/lib/ahcp\-unique\-id .
+If it doesn't exist, it will be created by
+.BR ahcpd .
 .TP
-.B \-s
-Do not perform stateful autoconfiguration; the autoconfiguration
-process will be finished after stateless autoconfiguration is done.
-.TP
-.BI \-S " first last dir"
-Perform the duties of a stateful AHCP server.
+.BI \-S " ipv6,first,last,dir,name-server,ntp-server"
+Run as an AHCP server rather than a client.
+.I Ipv6
+specifies the IPv6 prefix.
 .I First
 and
 .I last
 represent the bounds of the range of IPv4 addresses available; active
 leases will be stored in the directory
-.IR dir .
+.IR dir ,
+which should be in persistent storage (not a RAM disk).
+.B Name-server
+and
+.B ntp-server
+can be IPv4 or IPv6 addresses, and specify respectively the address of the
+DNS server and of the NTP server to configure clients with.
 .TP
 .B \-D
 Daemonise at startup.
@@ -83,56 +81,56 @@ otherwise.
 Specify a file to write our process id to.
 .SH FILES
 .TP
-.B /etc/ahcp/ahcp\-local.sh
-Script that will be called after IP addresses and routing are
-configured or unconfigured.  It will be passed one argument, which is
-either
+.B /var/lib/ahcp\-unique\-id
+An 8-byte long file containing this host's unique id.  If it doesn't exist,
+a new unique id will be generated from an interface's MAC address.
+.TP
+.BR /etc/ahcp/ahcp\-config.sh
+The script that performs the actual configuration.  It will be passed one
+argument, which is either
 .B start
 or
-.B stop
-during stateless autoconfiguration, and
-.B start\-ipv4
+.BR stop .
+.TP
+.B /etc/ahcp/ahcp\-local.sh
+If this is an executable script, it will be called by
+.B ahcp\-config.sh
+just after configuring or deconfiguring. It will be passed one
+argument, which is either
+.B start
 or
-.B stop-ipv4
-during stateful autoconfiguration.
-.TP
-.B /var/lib/ahcp-unique-id
-Default location of the file containing this host's unique-id.
-.TP
-.B /etc/ahcp/ahcp\-olsrd.conf
-Additional configuration for the
-.B olsrd
-daemon.
-.TP
-.BI /etc/ahcp/ahcp\-olsrd\- hostname .conf
-Host-specific additional configuration for the
-.B olsrd
-daemon.
-.TP
-.B /etc/ahcp/ahcp\-babel\-options
-Additional command-line flags to pass to the
-.B babel
-daemon.
-.TP
-.B /etc/ahcp/ahcp\-babel\-interfaces
-List of interfaces that participate in the
-.I Babel
-protocol but not in the
-.I AHCP
-protocol.
+.BR stop .
+.SH SIGNALS
 .TP
 .B SIGUSR1
-Dump ahcpd's status to standard output or to the log file.
+Print
+.BR ahcpd 's
+status to standard output or to the log file.
 .TP
 .B SIGUSR2
-Check all interfaces, then reopen the log file.
+Check all interfaces for status changes, then reopen the log file.
+.SH NOTES
+Since the AHCP protocol is designed for mesh networks, it doesn't have any
+provisions for setting routing parameters such as a default gateway, the
+IPv4 network mask and the IPv6 list of on-link prefixes; these are expected
+to be provided by a full-fledged routing protocol for mesh nodes, and by
+router advertisements for ordinary nodes.
+
+The AHCP server should use NTP to synchronise its clock.  If a server
+instance of
+.B ahcpd
+doesn't detect time synchronisation, it will only give out leases for
+a short period of time, and be extremely conservative about releasing them.
+Note that an SNTP client is not enough \[em]
+.B ahcpd
+actually checks with the kernel for time synchronisation, so real NTP is
+necessary.
 .SH SEE ALSO
 .BR dhcpcd (8),
 .BR dhclient (8),
 .BR babel (8),
 .BR olsrd (8),
-.BR ahcp-generate (8),
-.BR ahcp-generate-address (8),
+.BR ntpd (8),
 .IR "The Ad-Hoc Configuration Protocol" .
 .SH AUTHOR
 Juliusz Chroboczek.

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2007 by Juliusz Chroboczek
+Copyright (c) 2007-2009 by Juliusz Chroboczek
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -26,6 +26,31 @@ THE SOFTWARE.
 #define MAX(x,y) ((x)<=(y)?(y):(x))
 #define MIN(x,y) ((x)<=(y)?(x):(y))
 
-extern int nodns, noroute;
+extern int nodns, af;
 extern char *config_script;
 extern int debug_level;
+extern unsigned char myid[8];
+extern int numnetworks;
+struct network {
+    char *ifname;
+    int ifindex;
+};
+
+#define MAXNETWORKS 20
+extern struct network networks[MAXNETWORKS];
+
+extern struct in6_addr protocol_group;
+extern unsigned int protocol_port;
+extern int protocol_socket;
+
+extern const unsigned char zeroes[16], ones[16];
+
+void timeval_min(struct timeval *d, const struct timeval *s);
+void timeval_min_sec(struct timeval *d, int secs);
+void timeval_minus(struct timeval *d,
+                   const struct timeval *s1, const struct timeval *s2);
+int timeval_minus_msec(const struct timeval *s1, const struct timeval *s2);
+void timeval_plus_msec(struct timeval *d,
+                       const struct timeval *s, int msecs);
+int timeval_compare(const struct timeval *s1, const struct timeval *s2);
+int clock_stepped();

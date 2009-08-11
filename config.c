@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2007, 2008 by Juliusz Chroboczek
+Copyright (c) 2007-2008 by Juliusz Chroboczek
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -23,329 +23,235 @@ THE SOFTWARE.
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <assert.h>
 #include <unistd.h>
 #include <errno.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <sys/wait.h>
 #include <arpa/inet.h>
 #include <sys/time.h>
 #include <time.h>
+#include <net/if.h>
+#include <sys/ioctl.h>
+#include <netinet/in.h>
+#include <netinet/ether.h>
 
 #include "ahcpd.h"
+#include "monotonic.h"
 #include "config.h"
-#include "constants.h"
+#include "protocol.h"
 
-int data_len = -1;
+struct config_data *config_data = NULL;
+const unsigned char v4prefix[16] = 
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0, 0, 0, 0 };
 
-unsigned char *config_data = NULL;
-unsigned char *stateful_servers = NULL;
-unsigned int stateful_servers_len = 0;
+#define IPv6_ADDRESS 0
+#define IPv4_ADDRESS 1
+#define ADDRESS 2
+#define IPv6_PREFIX 3
+#define IPv4_PREFIX 4
 
-unsigned char ipv4_address[4];
-
-#define DO_NOTHING 0
-#define DO_START 1
-#define DO_STOP 2
-#define DO_START_IPv4 3
-#define DO_STOP_IPv4 4
+static struct prefix_list *
+copy_prefix_list(struct prefix_list *l)
+{
+    struct prefix_list *c = malloc(sizeof(struct prefix_list));
+    if(c == NULL)
+        return NULL;
+    memcpy(c, l, sizeof(struct prefix_list));
+    return c;
+}
 
 static int
-doit(const unsigned char *data, int len, unsigned char *ipv4,
-     int what, char **interfaces);
-static char *parse_address_list(const unsigned char *data, int len);
-
-int
-data_changed(unsigned char *data, int len)
+prefix_list_eq(struct prefix_list *l1, struct prefix_list *l2)
 {
-    if(!config_data)
-        return 1;
-
-    if(len == data_len && memcmp(config_data, data, len) == 0)
-        return 0;
-
-    return 1;
+    return l1->n == l2->n &&
+        memcmp(l1->l, l2->l, l1->n * sizeof(struct prefix)) == 0;
 }
-
-int
-accept_data(unsigned char *data, int len, char **interfaces, int dummy)
-{
-    unsigned char *new_data;
-    int rc;
-
-    if(len < 4)
-        return -1;
-
-    if(!data_changed(data, len))
-            return 0;
-
-    unaccept_stateful_data(interfaces);
-
-    rc = doit(data, len, NULL, DO_NOTHING, interfaces);
-    if(rc < 0)
-        return -1;
-
-    if(config_data && !dummy) {
-        rc = doit(config_data, data_len, NULL, DO_STOP, interfaces);
-        if(rc < 0) {
-            fprintf(stderr, "Ack!  Couldn't unconfigure!\n");
-            exit(1);
-        }
-    }
-
-    new_data = malloc(len);
-    if(new_data == NULL)
-        return -1;
-
-    memcpy(new_data, data, len);
-
-    if(config_data)
-        free(config_data);
-    config_data = new_data;
-    data_len = len;
-
-    if(!dummy) {
-        rc = doit(config_data, data_len, NULL, DO_START, interfaces);
-        if(rc < 0) {
-            fprintf(stderr, "Ack!  Couldn't configure.\n");
-            free(config_data);
-            config_data = NULL;
-            data_len = -1;
-            return -1;
-        }
-    }
-
-    return 1;
-}
-
-int
-unaccept_data(char **interfaces, int dummy)
-{
-    int rc;
-
-    if(!dummy) {
-        unaccept_stateful_data(interfaces);
-        rc = doit(config_data, data_len, NULL, DO_STOP, interfaces);
-        if(rc < 0) {
-            fprintf(stderr, "Ack!  Couldn't unconfigure!\n");
-            exit(1);
-        }
-    }
-    free(config_data);
-    config_data = NULL;
-    data_len = -1;
-    return 1;
-}
-
-static char *script_actions[] =
-    { "???", "start", "stop", "start-ipv4", "stop-ipv4" };
 
 static int
-doit(const unsigned char *data, int len, unsigned char *ipv4,
-     int what, char **interfaces)
+interface_ipv4(const char *ifname, unsigned char *addr_r)
 {
-    int i, opt, olen;
-    int mandatory = 0;
-    pid_t pid;
-    char *prefix = NULL, *nameserver = NULL, *ntp_server = NULL;
-    int routing_protocol = 0;
-    char *routing_protocol_name = NULL;
-    char *static_default_gw = NULL;
-    char *olsr_multicast_address = NULL;
-    char *babel_multicast_address = NULL;
-    int olsr_link_quality = 0;
-    int babel_port_number = -1;
-    int babel_hello_interval = -1;
+    struct ifreq req;
+    int s, rc;
+
+    s = socket(AF_INET, SOCK_DGRAM, 0);
+    if(s < 0)
+        return -1;
+
+    memset(&req, 0, sizeof(req));
+    strncpy(req.ifr_name, ifname, sizeof(req.ifr_name));
+    req.ifr_addr.sa_family = AF_INET;
+    rc = ioctl(s, SIOCGIFADDR, &req);
+    if(rc < 0) {
+        close(s);
+        return -1;
+    }
+
+    if(req.ifr_addr.sa_family != AF_INET)
+        return -1;
+
+    memcpy(addr_r, &((struct sockaddr_in*)&req.ifr_addr)->sin_addr, 4);
+    close(s);
+    return 1;
+}
+
+static struct prefix_list *
+my_ipv4(char **interfaces)
+{
+    struct prefix_list *l;
+    int i, rc;
+
+    l = calloc(1, sizeof(struct prefix_list));
+    if(l == NULL)
+        return NULL;
 
     i = 0;
+    while(l->n < MAX_PREFIX && interfaces[i]) {
+        l->l[l->n].plen = 0xFF;
+        memcpy(l->l[l->n].p, v4prefix, 12);
+        rc = interface_ipv4(interfaces[i], l->l[l->n].p + 12);
+        if(rc > 0)
+            l->n++;
+        i++;
+    }
+    if(l->n == 0) {
+        free(l);
+        return NULL;
+    }
 
-    while(i < len) {
-        opt = data[i];
-        if(opt == OPT_PAD) {
-            mandatory = 0;
-            i++;
-            continue;
-        } else if(opt == OPT_MANDATORY) {
-            mandatory = 1;
-            i++;
-            continue;
-        }
+    return l;
+}
+    
+/* Uses a static buffer. */
+char *
+format_prefix_list(struct prefix_list *p, int kind)
+{
+    static char buf[120];
+    int i, j, k;
+    const char *r;
 
-        olen = data[i + 1];
-        if(olen + 2 + i > len) {
-            fprintf(stderr, "Truncated message.\n");
-            return -1;
-        }
-        if(opt == OPT_EXPIRES) {
-            struct timeval now;
-            unsigned int expires;
-
-            if(olen != 4)
-                return -1;
-            memcpy(&expires, data + i + 2, 4);
-            expires = ntohl(expires);
-            gettimeofday(&now, NULL);
-            if(now.tv_sec > expires) {
-                fprintf(stderr, "Received expired data.\n");
-                return -1;
-            }
-        } else if(opt == OPT_IPv6_PREFIX || opt == OPT_NAME_SERVER ||
-                  opt == OPT_NTP_SERVER) {
-            char *value;
-            if(olen % 16 != 0) {
-                fprintf(stderr, "Unexpected length for %s.\n",
-                        opt == OPT_IPv6_PREFIX ? "prefix" : "server");
-                return -1;
-            }
-            value = parse_address_list(data + i + 2, olen);
-            if(opt == OPT_IPv6_PREFIX)
-                prefix = value;
-            else if(opt == OPT_NAME_SERVER)
-                nameserver = value;
-            else if(opt == OPT_NTP_SERVER)
-                ntp_server = value;
+    j = 0;
+    for(i = 0; i < p->n; i++) {
+        switch(kind) {
+        case IPv6_ADDRESS:
+            r = inet_ntop(AF_INET6, p->l[i].p, buf + j, 120 - j);
+            if(r == NULL) return NULL;
+            j += strlen(r);
+            break;
+        case IPv4_ADDRESS:
+            r = inet_ntop(AF_INET, p->l[i].p + 12, buf + j, 120 - j);
+            if(r == NULL) return NULL;
+            j += strlen(r);
+            break;
+        case ADDRESS:
+            if(memcmp(p->l[i].p, v4prefix, 12) == 0)
+                r = inet_ntop(AF_INET, p->l[i].p + 12, buf + j, 120 - j);
             else
-                abort();
-        } else if(opt == OPT_ROUTING_PROTOCOL) {
-            int omandatory = 0;
-            int j;
-            if(olen < 1) {
-                fprintf(stderr, "Unexpected size for routing protocol.\n");
-                return -1;
-            }
-            routing_protocol = data[i + 2];
-            if(routing_protocol == ROUTING_PROTOCOL_STATIC) {
-                routing_protocol_name = "static";
-            } else if(routing_protocol == ROUTING_PROTOCOL_OLSR) {
-                routing_protocol_name = "OLSR";
-            } else if(routing_protocol == ROUTING_PROTOCOL_BABEL) {
-                routing_protocol_name = "Babel";
-            } else {
-                if(routing_protocol != 0) {
-                    fprintf(stderr, "Unknown routing protocol %d\n",
-                            routing_protocol);
-                    routing_protocol = 0;
-                }
-            }
-            j = i + 3;
-            while(j < i + 2 + olen) {
-                int oopt = data[j], oolen;
-
-                if(oopt == OPT_PAD) {
-                    omandatory = 0;
-                    j++;
-                    continue;
-                } else if(oopt == OPT_MANDATORY) {
-                    omandatory = 1;
-                    j++;
-                    continue;
-                }
-
-                oolen = data[j + 1];
-                if(j + oolen > i + olen) {
-                    fprintf(stderr, "Truncated suboption.\n");
-                    return -1;
-                }
-                if((routing_protocol == ROUTING_PROTOCOL_STATIC &&
-                    oopt == STATIC_DEFAULT_GATEWAY) ||
-                   (routing_protocol == ROUTING_PROTOCOL_OLSR &&
-                    oopt == OLSR_MULTICAST_ADDRESS) ||
-                   (routing_protocol == ROUTING_PROTOCOL_BABEL &&
-                    oopt == BABEL_MULTICAST_ADDRESS)) {
-                    char *value;
-                    if(oolen % 16 != 0) {
-                        fprintf(stderr, "Unexpected length for %s\n",
-                                routing_protocol == ROUTING_PROTOCOL_STATIC ?
-                                "default gateway" : "multicast address");
-                        return -1;
-                    }
-                    value = parse_address_list(data + j + 2, oolen);
-                    if(routing_protocol == ROUTING_PROTOCOL_STATIC)
-                        static_default_gw = value;
-                    else if(routing_protocol == ROUTING_PROTOCOL_OLSR)
-                        olsr_multicast_address = value;
-                    else
-                        babel_multicast_address = value;
-                } else if(routing_protocol == ROUTING_PROTOCOL_OLSR &&
-                          oopt == OLSR_LINK_QUALITY) {
-                    int value;
-                    if(oolen != 1) {
-                        fprintf(stderr,
-                                "Unexpected length "
-                                "for OLSR link quality flag.");
-                        return -1;
-                    }
-                    value = data[j + 2];
-                    switch(value) {
-                    case 0: olsr_link_quality = 0; break;
-                    case 1: olsr_link_quality = 1; break;
-                    case 2: olsr_link_quality = 2; break;
-                    default:
-                        fprintf(stderr,
-                                "Unexpected value %d "
-                                "for OLSR link quality flag.",
-                                olsr_link_quality);
-                        return -1;
-                    }
-                } else if(routing_protocol == ROUTING_PROTOCOL_BABEL &&
-                          oopt == BABEL_PORT_NUMBER) {
-                    if(oolen != 2) {
-                        fprintf(stderr, "Unexpected lengh "
-                                "for Babel port number.\n");
-                        return -1;
-                    }
-                    babel_port_number = ((data[j + 2] << 8) | data[j + 3]);
-                } else if(routing_protocol == ROUTING_PROTOCOL_BABEL &&
-                          oopt == BABEL_HELLO_INTERVAL) {
-                    if(oolen != 2) {
-                        fprintf(stderr, "Unexpected lengh "
-                                "for Babel hello interval.\n");
-                        if(omandatory)
-                            return -1;
-                    }
-                    babel_hello_interval = ((data[j + 2] << 8) | data[j + 3]);
-                } else {
-                    if(omandatory || debug_level >= 1)
-                        fprintf(stderr, "Unknown suboption %d\n", oopt);
-                    if(omandatory) return -1;
-                }
-                omandatory = 0;
-                j += oolen + 2;
-            }
-        } else if(opt == OPT_AHCP_STATEFUL_SERVER) {
-            if(olen % 16 != 0) {
-                fprintf(stderr, "Unexpected length for stateful server.\n");
-                return -1;
-            }
-            if(what == DO_START) {
-                stateful_servers = malloc(olen);
-                if(stateful_servers == NULL)
-                    return -1;
-                memcpy(stateful_servers, data + i + 2, olen);
-                stateful_servers_len = olen;
-            }
-        } else {
-            if(mandatory || debug_level >= 1)
-                fprintf(stderr, "Unsupported option %d\n", opt);
-            if(mandatory) return -1;
+                r = inet_ntop(AF_INET6, p->l[i].p, buf + j, 120 - j);
+            j += strlen(r);
+            break;
+        case IPv6_PREFIX:
+            r = inet_ntop(AF_INET6, p->l[i].p, buf + j, 120 - j);
+            if(r == NULL) return NULL;
+            j += strlen(r);
+            k = snprintf(buf + j, 120 - j, "/%u", p->l[i].plen);
+            if(k < 0 || k >= 120 - j) return NULL;
+            j += k;
+            break;
+        default: abort();
         }
-        mandatory = 0;
-        i += olen + 2;
+        if(j >= 119) return NULL;
+        if(i + 1 < p->n)
+            buf[j++] = ' ';
+    }
+    if(j >= 120)
+        return NULL;
+    buf[j++] = '\0';
+    return buf;
+}
+
+void
+prefix_list_extract6(unsigned char *dest, struct prefix_list *p)
+{
+    if(!p || p->n == 0)
+        memset(dest, 0, 16);
+    memcpy(dest, p->l[0].p, 16);
+}
+
+void
+prefix_list_extract4(unsigned char *dest, struct prefix_list *p)
+{
+    if(!p || p->n == 0)
+        memset(dest, 0, 4);
+    memcpy(dest, p->l[0].p + 12, 4);
+}
+
+static void
+free_prefix_list(struct prefix_list *l)
+{
+    free(l);
+}
+
+static void
+parse_a6(struct prefix *p, const unsigned char *data)
+{
+    memcpy(p->p, data, 16);
+    p->plen = 0xFF;
+}
+
+static void
+parse_a4(struct prefix *p, const unsigned char *data)
+{
+    memcpy(p->p, v4prefix, 12);
+    memcpy(p->p + 12, data, 4);
+    p->plen = 0xFF;
+}
+
+static void
+parse_p6(struct prefix *p, const unsigned char *data)
+{
+    memcpy(p->p, data, 16);
+    p->plen = data[16];
+}
+
+static struct prefix_list *
+parse_list(const unsigned char *data, int len, int kind)
+{
+    struct prefix_list *l = calloc(1, sizeof(struct prefix_list));
+    int i, size;
+    void (*parser)(struct prefix *, const unsigned char*) = NULL;
+
+    switch(kind) {
+    case IPv6_ADDRESS: size = 16; parser = parse_a6; break;
+    case IPv6_PREFIX: size = 17; parser = parse_p6; break;
+    case IPv4_ADDRESS: size = 4; parser = parse_a4; break;
+    default: abort();
     }
 
-    if(what == DO_NOTHING || config_script[0] == '\0')
-        goto success;
+    if(len % size != 0)
+        return NULL;
 
-    if(what == DO_STOP) {
-        if(stateful_servers)
-            free(stateful_servers);
-        stateful_servers = NULL;
-        stateful_servers_len = 0;
+    i = 0;
+    while(i < len) {
+        if(l->n >= MAX_PREFIX)
+            break;
+        parser(&l->l[l->n], data + i * size);
+        l->n++;
+        i += size;
     }
+    return l;
+}
 
+static int
+run_script(const char *action, struct config_data *config, char **interfaces)
+{
+    pid_t pid;
     pid = fork();
     if(pid < 0) {
         perror("fork");
-        return 0;
+        return -1;
     } else if(pid == 0) {
         char buf[200];
         int i;
@@ -362,54 +268,26 @@ doit(const unsigned char *data, int len, unsigned char *ipv4,
         setenv("AHCP_INTERFACES", buf, 1);
         snprintf(buf, 50, "%d", debug_level);
         setenv("AHCP_DEBUG_LEVEL", buf, 1);
-        if(routing_protocol_name)
-            setenv("AHCP_ROUTING_PROTOCOL", routing_protocol_name, 1);
-        if(static_default_gw)
-            setenv("AHCP_STATIC_DEFAULT_GATEWAY", static_default_gw, 1);
-        if(olsr_multicast_address)
-            setenv("AHCP_OLSR_MULTICAST_ADDRESS", olsr_multicast_address, 1);
-        if(olsr_link_quality) {
-            buf[0] = olsr_link_quality + '0';
-            buf[1] = '\0';
-            setenv("AHCP_OLSR_LINK_QUALITY", buf, 1);
-        }
-        if(babel_multicast_address)
-            setenv("AHCP_BABEL_MULTICAST_ADDRESS",
-                   babel_multicast_address, 1);
-        if(babel_port_number >= 0) {
-            snprintf(buf, 50, "%d", babel_port_number);
-            setenv("AHCP_BABEL_PORT_NUMBER", buf, 1);
-        }
-        if(babel_hello_interval >= 0) {
-            snprintf(buf, 50, "%d", babel_hello_interval);
-            setenv("AHCP_BABEL_HELLO_INTERVAL", buf, 1);
-        }
-        if(prefix) {
-            setenv("AHCP_PREFIX", prefix, 1);
-        }
-        if(nameserver) {
-            if(!nodns)
-                setenv("AHCP_NAMESERVER", nameserver, 1);
-        }
-        if(ntp_server) {
-            setenv("AHCP_NTP_SERVER", ntp_server, 1);
-        }
-        if(ipv4) {
-            char buf[100];
-            const char *p;
-            p = inet_ntop(AF_INET, ipv4, buf, 100);
-            if(p == NULL)
-                return -1;
-            setenv("AHCP_IPv4_ADDRESS", buf, 1);
-        }
+        if(config->our_ipv6_address && (af & 2))
+            setenv("AHCP_IPv6_ADDRESS",
+                   format_prefix_list(config->our_ipv6_address, IPv6_ADDRESS),
+                   1);
+        if(config->ipv4_address && (af & 1))
+            setenv("AHCP_IPv4_ADDRESS",
+                   format_prefix_list(config->ipv4_address, IPv4_ADDRESS), 1);
 
-        if(noroute)
-            setenv("AHCP_DONT_START_ROUTING_PROTOCOL", "true", 1);
+        if(config->name_server && !nodns)
+            setenv("AHCP_NAMESERVER",
+                   format_prefix_list(config->name_server, ADDRESS), 1);
+
+        if(config->ntp_server)
+            setenv("AHCP_NTP_SERVER",
+                   format_prefix_list(config->ntp_server, ADDRESS), 1);
 
         if(debug_level >= 1)
-            printf("Running ``%s %s''\n", config_script,
-                   script_actions[what]);
-        execl(config_script, config_script, script_actions[what], NULL);
+            printf("Running ``%s %s''\n", config_script, action);
+
+        execl(config_script, config_script, action, NULL);
         perror("exec failed");
         exit(42);
     } else {
@@ -430,72 +308,162 @@ doit(const unsigned char *data, int len, unsigned char *ipv4,
             return -1;
         }
     }
-
- success:
-    if(prefix) free(prefix);
-    if(nameserver) free(nameserver);
-    if(ntp_server) free(ntp_server);
-    if(static_default_gw) free(static_default_gw);
-    if(olsr_multicast_address) free(olsr_multicast_address);
-    if(babel_multicast_address) free(babel_multicast_address);
     return 1;
 }
 
-static char *
-ntoa6(const unsigned char *data)
+unsigned int
+config_renew_time(void)
 {
-    const char *p;
-    char buf[100];
-    p = inet_ntop(AF_INET6, data, buf, 100);
-    if(p == NULL) return NULL;
-    return strdup(p);
+    return config_data->origin_m + config_data->expires * 5 / 6;
 }
 
-static char *
-parse_address_list(const unsigned char *data, int len)
+void
+free_config_data(struct config_data *config)
 {
-    char *result = NULL, *value;
-    int i;
+    free_prefix_list(config->server_ipv6);
+    free_prefix_list(config->server_ipv4);
+    free_prefix_list(config->ipv6_prefix);
+    free_prefix_list(config->ipv4_prefix);
+    free_prefix_list(config->ipv6_address);
+    free_prefix_list(config->ipv4_address);
+    free_prefix_list(config->name_server);
+    free_prefix_list(config->ntp_server);
+    free_prefix_list(config->our_ipv6_address);
+    free(config);
+}
 
-    if(len % 16 != 0)
+struct config_data *
+copy_config_data(struct config_data *config)
+{
+    struct config_data *c = malloc(sizeof(struct config_data));
+    if(c == NULL)
         return NULL;
 
-    i = 0;
-    while(i < len) {
-        value = ntoa6(data + i);
-        if(value == NULL) {
-            fprintf(stderr, "Couldn't grok IPv6 address");
-            if(result) free(result);
-            return NULL;
-        }
-        if(result == NULL) {
-            result = value;
-        } else {
-            char *old_result = result;
-            result = realloc(old_result,
-                             strlen(old_result) + 1 + strlen(value) + 1);
-            if(result == NULL) {
-                free(old_result);
-                return NULL;
-            }
-            strcat(result, " ");
-            strcat(result, value);
-            free(value);
-        }
-        i += 16;
-    }
-    return result;
+    *c = *config;
+
+#define COPY(field) \
+    do { if(c->field) c->field = copy_prefix_list(c->field); } while(0)
+    COPY(server_ipv6);
+    COPY(server_ipv4);
+    COPY(ipv6_prefix);
+    COPY(ipv4_prefix);
+    COPY(ipv6_address);
+    COPY(ipv4_address);
+    COPY(name_server);
+    COPY(ntp_server);
+    COPY(our_ipv6_address);
+#undef COPY
+
+    return c;
 }
 
 int
-parse_stateful_data(unsigned char *data, int len, unsigned char *ipv4_return)
+config_data_compatible(struct config_data *config1, struct config_data *config2)
 {
-    int i, opt, olen, mandatory = 0;
-    unsigned char ipv4[4] = {0, 0, 0, 0};
+
+    if(!!config1->ipv4_address != !!config2->ipv4_address ||
+       !!config1->ipv6_address != !!config2->ipv6_address ||
+       !!config1->ipv6_prefix != !!config2->ipv6_prefix)
+        return 0;
+
+    if(config1->ipv4_address) {
+        if(!prefix_list_eq(config1->ipv4_address, config2->ipv4_address) != 0)
+            return 0;
+    }
+
+    if(config1->ipv6_address) {
+        if(!prefix_list_eq(config1->ipv6_address, config2->ipv6_address) != 0)
+            return 0;
+    }
+
+    if(config1->ipv6_prefix) {
+        if(!prefix_list_eq(config1->ipv6_prefix, config2->ipv6_prefix) != 0)
+            return 0;
+    }
+
+    return 1;
+}
+
+struct config_data *
+make_config_data(int expires,
+                 unsigned char *ipv4, unsigned char *ipv6_prefix,
+                 unsigned char *name_server, int name_server_len,
+                 unsigned char *ntp_server, int ntp_server_len,
+                 char **interfaces)
+{
+    struct config_data *config;
+    struct timeval now, real;
+    int clock_status;
+    struct prefix_list *my_address;
+
+    gettime(&now, NULL);
+    get_real_time(&real, &clock_status);
+
+    config = calloc(1, sizeof(struct config_data));
+    if(config == NULL)
+        return NULL;
+
+    config->expires = expires;
+    config->origin_m = now.tv_sec;
+    if(clock_status != CLOCK_BROKEN)
+        config->origin = real.tv_sec;
+
+    config->expires_m = config->origin_m + config->expires;
+
+    if(ipv4)
+        config->ipv4_address = parse_list(ipv4, 4, IPv4_ADDRESS);
+
+    if(ipv6_prefix) {
+        config->ipv6_prefix = parse_list(ipv6_prefix, 16, IPv6_ADDRESS);
+        config->ipv6_prefix->l[0].plen = 64;
+    }
+
+    if(name_server_len > 0)
+        config->name_server = parse_list(name_server, name_server_len, IPv6_ADDRESS);
+
+    if(ntp_server_len > 0)
+        config->ntp_server = parse_list(ntp_server, ntp_server_len, IPv6_ADDRESS);
+
+    my_address = my_ipv4(interfaces);
+    if(my_address)
+        config->server_ipv4 = my_address;
+
+    return config;
+}
+
+/* Parse a message.  Configure is 1 to configure, 0 to pretend, and -1 to
+   omit a number of sanity checks when parsing client messages. */
+struct config_data *
+parse_message(int configure, const unsigned char *data, int len,
+              char **interfaces)
+{
+    int bodylen, i, opt, olen, rc;
+    int mandatory = 0;
+    const unsigned char *body;
+    struct config_data *config;
+    unsigned origin = 0, expires = 0;
+    struct timeval now, real;
+    int clock_status;
+
+    if(len < 4)
+        return NULL;
+
+    gettime(&now, NULL);
+    get_real_time(&real, &clock_status);
+
+    body = data + 4;
+
+    bodylen = (data[2] << 8) | data[3];
+    if(bodylen > len - 4)
+        return NULL;
+
+    config = calloc(1, sizeof(struct config_data));
+    if(config == NULL)
+        return NULL;
 
     i = 0;
-    while(i < len) {
-        opt = data[i];
+    while(i < bodylen) {
+        opt = body[i];
         if(opt == OPT_PAD) {
             mandatory = 0;
             i++;
@@ -506,94 +474,463 @@ parse_stateful_data(unsigned char *data, int len, unsigned char *ipv4_return)
             continue;
         }
 
-        olen = data[i + 1];
-        if(olen + 2 + i > len) {
+        olen = body[i + 1];
+        if(olen + 2 + i > bodylen) {
             fprintf(stderr, "Truncated message.\n");
-            return -1;
+            goto fail;
         }
-        if(opt == OPT_IPv4_ADDRESS) {
-            if(olen < 4 || olen % 4 != 0)
-                return -1;
-            memcpy(ipv4, data + i + 2, 4);
+
+        if(opt == OPT_ORIGIN_TIME) {
+            unsigned int when;
+
+            if(olen != 4)
+                goto fail;
+
+            memcpy(&when, body + i + 2, 4);
+            when = ntohl(when);
+            if(origin <= 0)
+                origin = when;
+            else
+                origin = MIN(origin, when);
+        } else if(opt == OPT_EXPIRES) {
+            unsigned int secs;
+
+            if(olen != 4)
+                goto fail;
+
+            memcpy(&secs, body + i + 2, 4);
+            secs = ntohl(secs);
+            if(expires <= 0)
+                expires = secs;
+            else
+                expires = MIN(expires, secs);
+        } else if(opt == OPT_IPv6_PREFIX) {
+            if(olen % 17 != 0) {
+                fprintf(stderr, "Unexpected length for prefix.\n");
+                goto fail;
+            }
+
+            config->ipv6_prefix = parse_list(body + i + 2, olen, IPv6_PREFIX);
+        } else if(opt == OPT_MY_IPv6_ADDRESS || opt == OPT_IPv6_ADDRESS ||
+                  opt == OPT_NAME_SERVER || opt == OPT_NTP_SERVER) {
+            struct prefix_list *value;
+            if(olen % 16 != 0) {
+                fprintf(stderr, "Unexpected length for %s.\n",
+                        opt == OPT_IPv6_ADDRESS ? "address" : "server");
+                goto fail;
+            }
+
+            value = parse_list(body + i + 2, olen, IPv6_ADDRESS);
+            if(opt == OPT_MY_IPv6_ADDRESS)
+                config->server_ipv6 = value;
+            else if(opt == OPT_IPv6_ADDRESS)
+                config->ipv6_address = value;
+            else if(opt == OPT_NAME_SERVER)
+                config->name_server = value;
+            else if(opt == OPT_NTP_SERVER)
+                config->ntp_server = value;
+            else
+                abort();
+        } else if(opt == OPT_MY_IPv4_ADDRESS || opt == OPT_IPv4_ADDRESS) {
+            struct prefix_list *value;
+            value = parse_list(body + i + 2, olen, IPv4_ADDRESS);
+            if(opt == OPT_MY_IPv4_ADDRESS)
+                config->server_ipv4 = value;
+            else if(opt == OPT_IPv4_ADDRESS)
+                config->ipv4_address = value;
+            else
+                abort();
         } else {
-            if(mandatory) return -1;
+            if(mandatory || debug_level >= 1)
+                fprintf(stderr, "Unsupported option %d\n", opt);
+            if(mandatory && configure >= 0)
+                goto fail;
         }
         mandatory = 0;
         i += olen + 2;
     }
 
-    memcpy(ipv4_return, ipv4, 4);
-    return 1;
-}
+    if(configure >= 0 && expires <= 0)
+        goto fail;
 
-int
-accept_stateful_data(unsigned char *data, int len, unsigned short lease_time,
-                     char **interfaces)
-{
-    const unsigned char z[4] = {0, 0, 0, 0};
-    unsigned char ipv4[4] = {0, 0, 0, 0};
-    int rc;
+    config->origin_m = now.tv_sec;
+    config->expires = MIN(25 * 3600, expires);
 
-    if(!config_data) {
-        fprintf(stderr, "Attempted to configure IPv4 while unconfigured.\n");
-        return -1;
+    if(origin >= 0) {
+        config->origin = origin;
+        if(configure >= 0) {
+            if(origin >= real.tv_sec - 300 && origin <= real.tv_sec + 300) {
+                time_confirm(1);
+            } else {
+                fprintf(stderr,
+                        "Detected clock skew (client=%ld, server=%ld).\n",
+                        (long)now.tv_sec, (long)config->origin);
+                time_confirm(0);
+            }
+        }
     }
 
-    rc = parse_stateful_data(data, len, ipv4);
-    if(rc < 0)
-        return -1;
+    if(configure >= 0) {
+        config->expires_m = config->origin_m + config->expires;
 
-    if(memcmp(ipv4_address, z, 4) == 0) {
-        rc = doit(config_data, data_len, ipv4, DO_START_IPv4, interfaces);
-        if(rc < 0)
-            return -1;
-        memcpy(ipv4_address, ipv4, 4);
-        return 1;
-    } else if(memcmp(ipv4_address, ipv4, 4) != 0) {
-        return -1;
-    } else {
-        return 0;
-    }
-}
-
-int
-unaccept_stateful_data(char **interfaces)
-{
-    const unsigned char z[4] = {0, 0, 0, 0};
-    int rc;
-
-    if(memcmp(ipv4_address, z, 4) == 0) {
-        return 0;
-    } else {
-        if(!config_data) {
-            fprintf(stderr,
-                    "Attempted to unconfigure IPv4 while unconfigured.\n");
-            return -1;
+        if(clock_status != CLOCK_BROKEN && config->origin > 0) {
+            config->expires_m =
+                MIN(config->expires_m,
+                    config->origin_m + (real.tv_sec - config->origin) +
+                    config->expires);
         }
 
-        rc = doit(config_data, data_len, ipv4_address,
-                  DO_STOP_IPv4, interfaces);
-        if(rc < 0)
-            return -1;
-        memcpy(ipv4_address, z, 4);
-        return 1;
+        if(config->ipv6_address) {
+            config->our_ipv6_address = copy_prefix_list(config->ipv6_address);
+        } else if(config->ipv6_prefix && config->ipv6_prefix->n > 0 &&
+                  config->ipv6_prefix->l[0].plen >= 64) {
+            unsigned char address[16];
+            int have_address = 0;
+
+            memcpy(address, config->ipv6_prefix->l[0].p, 16);
+
+            i = 0;
+            while(interfaces[i]) {
+                rc = if_eui64(interfaces[i], address + 8);
+                if(rc >= 0)
+                    have_address = 1;
+                i++;
+            }
+
+            if(!have_address) {
+                rc = random_eui64(address + 8);
+                if(rc >= 0)
+                    have_address = 1;
+            }
+            
+            if(have_address)
+                config->our_ipv6_address =
+                    parse_list(address, 16, IPv6_ADDRESS);
+            if(!config->our_ipv6_address)
+                fprintf(stderr, "Couldn't generate IPv6 address.\n");
+        }
     }
+
+    if(configure > 0 && config_script[0] != '\0' &&
+       config->expires_m > now.tv_sec + 5) {
+        if(config_data) {
+            if(!config_data_compatible(config_data, config))
+                unconfigure(interfaces);
+        }
+        if(!config_data) {
+            rc = run_script("start", config, interfaces);
+            if(rc > 0)
+                config_data = copy_config_data(config);
+        } else {
+            config_data->origin = config->origin;
+            config_data->origin_m = config->origin_m;
+            config_data->expires = config->expires;
+        }
+    }
+
+    return config;
+
+ fail:
+    free_config_data(config);
+    return NULL;
 }
 
 int
-build_stateful_data(unsigned char *buf, const unsigned char *ipv4)
+unconfigure(char **interfaces)
 {
-    const unsigned short zero = htons(0);
-    const unsigned short six = htons(6);
+    int rc;
+    rc = run_script("stop", config_data, interfaces);
+    free_config_data(config_data);
+    config_data = NULL;
+    return rc;
+}
 
-    if(ipv4) {
-        memcpy(buf, &six, 2);
-        buf[2] = OPT_IPv4_ADDRESS;
-        buf[3] = 4;
-        memcpy(buf + 4, ipv4, 4);
-        return 8;
-    } else {
-        memcpy(buf, &zero, 2);
-        return 2;
+int
+query_body(unsigned char opcode, int time, const unsigned char *ipv4,
+           unsigned char *buf, int buflen)
+{
+    int i, j;
+    unsigned nowsecs, expires;
+    struct timeval real;
+    int clock_status;
+
+    get_real_time(&real, &clock_status);
+
+    /* Skip header */
+    i = 4; if(i >= buflen) goto fail;
+
+    if(clock_status != CLOCK_BROKEN) {
+        nowsecs = htonl(real.tv_sec);
+        buf[i++] = OPT_ORIGIN_TIME; if(i >= buflen) goto fail;
+        buf[i++] = 4; if(i >= buflen - 4) goto fail;
+        memcpy(buf + i, &nowsecs, 4);
+        i += 4;
     }
+
+    if(time > 0) {
+        expires = htonl(time);
+        buf[i++] = OPT_EXPIRES; if(i >= buflen) goto fail;
+        buf[i++] = 4; if(i >= buflen - 4) goto fail;
+        memcpy(buf + i, &expires, 4);
+        i += 4;
+    }
+
+    if((af & 1)) {
+        buf[i++] = OPT_IPv4_ADDRESS; if(i >= buflen) goto fail;
+        buf[i++] = ipv4 ? 4 : 0; if(i >= buflen) goto fail;
+        if(ipv4) {
+            if(i >= buflen - 4) goto fail;
+            memcpy(buf + i, ipv4, 4);
+            i += 4;
+        }
+    }
+
+    if((af & 2)) {
+        buf[i++] = OPT_IPv6_PREFIX; if(i >= buflen) goto fail;
+        buf[i++] = 0; if(i >= buflen) goto fail;
+    }
+
+    /* Set up header */
+    j = i - 4;
+    buf[0] = opcode;
+    buf[1] = 0;
+    buf[2] = (j >> 8) & 0xFF;
+    buf[3] = j & 0xFF;
+
+    return i;
+
+ fail:
+    return -1;
+}
+
+int
+server_body(unsigned char opcode, struct config_data *config,
+            unsigned char *buf, int buflen)
+{
+    int i, j;
+    struct timeval now, real;
+    int clock_status;
+    unsigned nowsecs, expires;
+    
+    gettime(&now, NULL);
+    get_real_time(&real, &clock_status);
+
+    /* Skip header */
+    i = 4; if(i >= buflen) goto fail;
+
+    if(now.tv_sec >= config->expires_m)
+        return -1;
+
+    expires = config->expires;
+
+    if(clock_status != CLOCK_BROKEN) {
+        nowsecs = htonl(real.tv_sec);
+        buf[i++] = OPT_ORIGIN_TIME; if(i >= buflen) goto fail;
+        buf[i++] = 4; if(i >= buflen - 4) goto fail;
+        memcpy(buf + i, &nowsecs, 4);
+        i += 4;
+    }
+
+    expires = htonl(expires);
+    buf[i++] = OPT_MANDATORY; if(i >= buflen) goto fail;
+    buf[i++] = OPT_EXPIRES; if(i >= buflen) goto fail;
+    buf[i++] = 4; if(i >= buflen - 4) goto fail;
+    memcpy(buf + i, &expires, 4);
+    i += 4;
+
+    if(config->ipv4_address) {
+        int j;
+        buf[i++] = OPT_IPv4_ADDRESS; if(i >= buflen) goto fail;
+        buf[i++] = 4 * config->ipv4_address->n;
+        if(i >= buflen) goto fail;
+        for(j = 0; j < config->ipv4_address->n; j++) {
+            if(i >= buflen - 4) goto fail;
+            memcpy(buf + i, config->ipv4_address->l[j].p + 12, 4);
+            i += 4;
+        }
+    }
+
+    if(config->ipv6_prefix) {
+        int j;
+        buf[i++] = OPT_IPv6_PREFIX; if(i >= buflen) goto fail;
+        buf[i++] = 17 * config->ipv6_prefix->n; if(i >= buflen) goto fail;
+        for(j = 0; j < config->ipv6_prefix->n; j++) {
+            if(i >= buflen - 17) goto fail;
+            memcpy(buf + i, config->ipv6_prefix->l[j].p, 16);
+            i += 16;
+            buf[i++] = config->ipv6_prefix->l[j].plen;
+        }
+    }
+
+    if(config->ipv6_address) {
+        int j;
+        buf[i++] = OPT_IPv6_ADDRESS; if(i >= buflen) goto fail;
+        buf[i++] = 16 * config->ipv6_address->n;
+        if(i >= buflen) goto fail;
+        for(j = 0; j < config->ipv6_address->n; j++) {
+            if(i >= buflen - 16) goto fail;
+            memcpy(buf + i, config->ipv6_address->l[j].p, 16);
+            i += 16;
+        }
+    }
+
+    if(config->name_server) {
+        int j;
+        buf[i++] = OPT_NAME_SERVER; if(i >= buflen) goto fail;
+        buf[i++] = 16 * config->name_server->n;
+        if(i >= buflen) goto fail;
+        for(j = 0; j < config->name_server->n; j++) {
+            if(i >= buflen - 6) goto fail;
+            memcpy(buf + i, config->name_server->l[j].p, 16);
+            i += 16;
+        }
+    }
+
+    if(config->ntp_server) {
+        int j;
+        buf[i++] = OPT_NTP_SERVER; if(i >= buflen) goto fail;
+        buf[i++] = 16 * config->ntp_server->n;
+        if(i >= buflen) goto fail;
+        for(j = 0; j < config->ntp_server->n; j++) {
+            if(i >= buflen - 6) goto fail;
+            memcpy(buf + i, config->ntp_server->l[j].p, 16);
+            i += 16;
+        }
+    }
+
+    if(config->server_ipv6) {
+        int j;
+        buf[i++] = OPT_MY_IPv6_ADDRESS; if(i >= buflen) goto fail;
+        buf[i++] = 16 * config->server_ipv6->n; if(i >= buflen) goto fail;
+        for(j = 0; j < config->server_ipv6->n; j++) {
+            if(i >= buflen - 16) goto fail;
+            memcpy(buf + i, config->server_ipv6->l[j].p, 16);
+            i += 16;
+        }
+    }
+
+    if(config->server_ipv4) {
+        int j;
+        buf[i++] = OPT_MY_IPv4_ADDRESS; if(i >= buflen) goto fail;
+        buf[i++] = 4 * config->server_ipv4->n; if(i >= buflen) goto fail;
+        for(j = 0; j < config->server_ipv4->n; j++) {
+            if(i >= buflen - 4) goto fail;
+            memcpy(buf + i, config->server_ipv4->l[j].p + 12, 4);
+            i += 4;
+        }
+    }
+
+    /* Set up header */
+    j = i - 4;
+    buf[0] = opcode;
+    buf[1] = 0;
+    buf[2] = (j >> 8) & 0xFF;
+    buf[3] = j & 0xFF;
+
+    return i;
+
+ fail:
+    return -1;
+}
+
+int
+address_conflict(struct prefix_list *a, struct prefix_list *b)
+{
+    int i, j;
+
+    for(i = 0; i < a->n; i++)
+        for(j = 0; j < b->n; j++)
+            if(memcmp(a->l[i].p, b->l[j].p, 16) == 0)
+                return 1;
+    return 0;
+}
+
+/* Determine an interface's hardware address, in modified EUI-64 format */
+#ifdef SIOCGIFHWADDR
+int
+if_eui64(char *ifname, unsigned char *eui)
+{
+    int s, rc;
+    struct ifreq ifr;
+
+    s = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
+    if(s < 0) return -1;
+    memset(&ifr, 0, sizeof(ifr));
+    strncpy(ifr.ifr_name, ifname, sizeof(ifr.ifr_name));
+    rc = ioctl(s, SIOCGIFHWADDR, &ifr);
+    if(rc < 0) {
+        int saved_errno = errno;
+        close(s);
+        errno = saved_errno;
+        return -1;
+    }
+    close(s);
+
+    switch(ifr.ifr_hwaddr.sa_family) {
+    case ARPHRD_ETHER:
+    case ARPHRD_FDDI:
+    case ARPHRD_IEEE802_TR:
+    case ARPHRD_IEEE802: {
+        unsigned char *mac;
+        mac = (unsigned char *)ifr.ifr_hwaddr.sa_data;
+        /* Check for null address and group and global bits */
+        if(memcmp(mac, zeroes, 6) == 0 ||
+           (mac[0] & 1) != 0 || (mac[0] & 2) != 0) {
+            errno = ENOENT;
+            return -1;
+        }
+        memcpy(eui, mac, 3);
+        eui[3] = 0xFF;
+        eui[4] = 0xFE;
+        memcpy(eui + 5, mac + 3, 3);
+        eui[0] ^= 2;
+        return 1;
+    }
+    case ARPHRD_EUI64:
+    case ARPHRD_IEEE1394:
+    case ARPHRD_INFINIBAND: {
+        unsigned char *mac;
+        mac = (unsigned char *)ifr.ifr_hwaddr.sa_data;
+        if(memcmp(mac, zeroes, 8) == 0 ||
+           (mac[0] & 1) != 0 || (mac[0] & 2) != 0) {
+            errno = ENOENT;
+            return -1;
+        }
+        memcpy(eui, mac, 64);
+        eui[0] ^= 2;
+        return 1;
+    }
+    default:
+        errno = ENOENT;
+        return -1;
+    }
+}
+
+#else
+
+#warning Cannot determine MAC addresses on this platform
+
+int
+if_eui64(char *ifname, unsigned char *eui)
+{
+    errno = ENOSYS;
+    return -1;
+}
+#endif
+
+int
+random_eui64(unsigned char *eui)
+{
+    int fd, rc;
+    fd = open("/dev/random", O_RDONLY);
+    if(fd < 0)
+        return -1;
+
+    rc = read(fd, eui, 8);
+    if(rc < 0)
+        return -1;
+    close(fd);
+
+    eui[0] &= ~3;
+    return 1;
 }

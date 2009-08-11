@@ -1,7 +1,7 @@
 #!/bin/sh
 
 die() {
-    echo $1 >&2
+    echo "$@" >&2
     exit 1
 }
 
@@ -10,60 +10,47 @@ findcmd() {
         die "Couldn't find $1, please install ${2:-it} or fix your path."
 }
 
+first() {
+    echo "$1"
+}
+
 nl='
 '
 
-olsrd_pidfile=/var/run/ahcp_olsrd_pid
-babel_pidfile=/var/run/babel.pid
-
 usage="Usage: $0 (start|stop)"
 debuglevel=${AHCP_DEBUG_LEVEL:-1}
-if (echo "$AHCP_PREFIX" | grep -q ' ') ; then
-    echo "Warning: multiple prefixes not supported yet." >&2
-    prefix="$(echo $AHCP_PREFIX | sed 's/ .*//')"
-else
-    prefix="${AHCP_PREFIX:--s -r}"
-fi
-
-[ $# -eq 1 ] || die "$usage"
 
 if [ $debuglevel -ge 2 ]; then
-    set -x
-    env | grep AHCP
+    env | grep ^AHCP
 fi
+
+[ $debuglevel -ge 3 ] && set -x
 
 interfaces="$AHCP_INTERFACES"
 if [ -z "$interfaces" ]; then die "No interface set"; fi
-first_if="$(echo $interfaces | sed 's/ .*//')"
-other_if="$(echo $interfaces | sed 's/[^ ]*//')"
+first_if=$(first $interfaces)
 
 ipv4_address="$AHCP_IPv4_ADDRESS"
+ipv6_address="$AHCP_IPv6_ADDRESS"
 
 platform=`uname`
 
-if [ "$platform" = "Darwin" ]
-then
+if [ "$platform" = "Darwin" ]; then
 
-    if_address() {
-	l="$(ifconfig "$1" | grep ether)"
-	mac="$(echo "$l" | sed 's|^.*ether \([0-9a-z:]*\) .*$|\1|')"
-	ahcp-generate-address $prefix $mac
-    }
-    
-    add_address() {
-	ifconfig "$1" inet6 "${2:-$(if_address $1)}$3"
-    }
-    
-    del_address() {
-	ifconfig "$1" inet6 "${2:-$(if_address $1)}$3" delete
+    add_ipv6_address() {
+	ifconfig "$1" inet6 "$2/$3"
     }
 
-    add_ipv4_addresses() {
-        echo "IPv4 not implemented under Darwin" >&2
+    del_ipv6_address() {
+	ifconfig "$1" inet6 "$2/$3" delete
     }
 
-    del_ipv4_addresses() {
-        :
+    add_ipv4_address() {
+	ifconfig "$1" inet "$2/$3"
+    }
+
+    del_ipv4_address() {
+	ifconfig "$1" inet "$2/$3" delete
     }
 
 else
@@ -73,42 +60,42 @@ else
     (ip -6 addr show dev lo | grep -q 'inet6') || \
 	die "No IPv6 address on lo, please modprobe ipv6"
 
-    if_address() {
-	l="$(ip -0 addr show dev "$1" | grep '^ *link/ether ' | head -n 1)"
-	mac="$(echo "$l" | sed 's|^ *link/ether \([0-9a-z:]*\) .*$|\1|')"
-	ahcp-generate-address $prefix $mac
-    }
-    
-    add_address() {
-	ip -6 addr add "${2:-$(if_address $1)}$3" dev "$1"
-    }
-    
-    del_address() {
-	ip -6 addr del "${2:-$(if_address $1)}$3" dev "$1"
-    }
-    
-    add_ipv4_addresses() {
-        for i in $interfaces; do
-            ip addr add $ipv4_address/32 dev $i
-        done
+    add_ipv6_address() {
+	ip -6 addr add "$2/$3" dev "$1"
     }
 
-    del_ipv4_addresses() {
-        for i in $interfaces; do
-            ip addr del $ipv4_address/32 dev $i
-        done
+    del_ipv6_address() {
+	ip -6 addr del "$2/$3" dev "$1"
+    }
+
+    add_ipv4_address() {
+	ip addr add "$2/$3" dev "$1"
+    }
+
+    del_ipv4_address() {
+	ip addr del "$2/$3" dev "$1"
     }
 fi
-    
+
 add_addresses() {
     for i in $interfaces; do
-        add_address $i
+        for a in $ipv6_address; do
+            add_ipv6_address $i $a 128
+        done
+        for a in $ipv4_address; do
+            add_ipv4_address $i $a 32
+        done
     done
 }
 
 del_addresses() {
     for i in $interfaces; do
-        del_address $i
+        for a in $ipv6_address; do
+            del_ipv6_address $i $a 128
+        done
+        for a in $ipv4_address; do
+            del_ipv4_address $i $a 32
+        done
     done
 }
 
@@ -137,167 +124,20 @@ nameserver_stop() {
     fi
 }
 
-start_static() {
-    # add the first interface with a /64 prefix, to make the case with
-    # no reachable gateway work
-    add_address "$first_if" '' /64
-    for i in $other_if; do
-        add_address "$i"
-    done
-    for gw in $AHCP_STATIC_DEFAULT_GATEWAY; do
-          ip -6 route add ::/0 via "$gw" dev "$first_if";
-    done
-}
-
-stop_static() {
-    for gw in $AHCP_STATIC_DEFAULT_GATEWAY; do
-        ip -6 route del ::/0 via "$gw" dev "$interfaces"
-    done
-    del_address "$first_if" '' /64
-    for i in $other_if; do
-        del_address "$i"
-    done
-}
-
-start_olsr() {
-    multicast="$AHCP_OLSR_MULTICAST_ADDRESS"
-
-    conf_filename=/var/run/ahcp-olsrd-"$AHCP_DAEMON_PID".conf
-
-    cat > "$conf_filename" <<EOF
-DebugLevel $debuglevel
-
-IpVersion 6
-
-AllowNoInt yes
-EOF
-
-    for interface in $interfaces; do
-        cat >> "$conf_filename" <<EOF
-Interface "$interface" {
-    Ip6AddrType global
-    Ip6MulticastSite $multicast
-    Ip6MulticastGlobal $multicast
-}
-EOF
-    done
-    if [ "${AHCP_OLSR_LINK_QUALITY:-0}" -ge 1 ]; then
-        echo "UseHysteresis no" >> "$conf_filename"
-        echo "LinkQualityLevel $AHCP_OLSR_LINK_QUALITY" >> "$conf_filename"
-    fi
-
-    for file in "/etc/ahcp/ahcp-olsrd-$(uname -n).conf" \
-                "/etc/ahcp/ahcp-olsrd.conf" ; do
-        if [ -r "$file" ]; then
-            sed "s/\$AHCP_OLSR_MULTICAST_ADDRESS/$multicast/" < "$file" \
-                >> "$conf_filename"
-        fi
-    done
-    add_addresses
-    nameserver_start
-    if [ -z "${AHCP_DONT_START_ROUTING_PROTOCOL}" ] ; then
-        olsrd -f "$conf_filename" -nofork &
-        echo $! > $olsrd_pidfile
-    fi
-}
-
-stop_olsr() {
-    conf_filename=/var/run/ahcp-olsrd-"$AHCP_DAEMON_PID".conf
-
-    if [ -z "${AHCP_DONT_START_ROUTING_PROTOCOL}" ] ; then
-        kill $(cat "$olsrd_pidfile")
-        rm "$olsrd_pidfile"
-    fi
-
-    del_addresses
-    rm "$conf_filename"
-    nameserver_stop
-}
-
-start_babel() {
-    multicast="${AHCP_BABEL_MULTICAST_ADDRESS:+-m $AHCP_BABEL_MULTICAST_ADDRESS}"
-    port="${AHCP_BABEL_PORT_NUMBER:+-p $AHCP_BABEL_PORT_NUMBER}"
-    hello="${AHCP_BABEL_HELLO_INTERVAL:+-h $(expr $AHCP_BABEL_HELLO_INTERVAL / 100)}"
-
-    if [ -r /etc/ahcp/ahcp-babel-options ] ; then
-        options="$(cat /etc/ahcp/ahcp-babel-options)"
-    fi
-
-    if [ -r /etc/ahcp/ahcp-babel-interfaces ] ; then
-        more_interfaces="$(cat /etc/ahcp/ahcp-babel-interfaces)"
-    fi
-
-    first_addr="$(if_address $first_if)"
-
-    # Babel can work with unnumbered links, so only number the first one
-    add_address $first_if $first_addr
-    nameserver_start
-
-    if [ $debuglevel -le 2 ] ; then
-        babel_debuglevel=0
-    else
-        babel_debuglevel="$(expr $debuglevel - 2)"
-    fi
-
-    if [ -z "${AHCP_DONT_START_ROUTING_PROTOCOL}" ] ; then
-        babel -I $babel_pidfile -d $babel_debuglevel \
-            $multicast $port $hello $options \
-            $interfaces $more_interfaces &
-    else
-        [ -e $babel_pidfile ] && kill -USR2 $(cat $babel_pidfile) || true
-    fi
-    sleep 1
-}
-
-stop_babel() {
-    if [ -z "${AHCP_DONT_START_ROUTING_PROTOCOL}" ] ; then
-        if [ -e "$babel_pidfile" ]; then
-            kill $(cat "$babel_pidfile")
-            sleep 1
-            [ -e "$babel_pidfile" ] && sleep 1
-            [ -e "$babel_pidfile" ] && sleep 1
-            [ -e "$babel_pidfile" ] && sleep 1
-            [ -e "$babel_pidfile" ] && sleep 1
-            [ -e "$babel_pidfile" ] && echo "Failed to kill Babel."
-        fi
-    fi
-
-    del_address $first_if
-
-    if [ ! -z "${AHCP_DONT_START_ROUTING_PROTOCOL}" ] ; then
-        [ -e $babel_pidfile ] && kill -USR2 $(cat $babel_pidfile) || true
-    fi
-
-    nameserver_stop
-}
-
 case $1 in
     start)
-        case ${AHCP_ROUTING_PROTOCOL:-static} in
-            static) start_static;;
-            OLSR) start_olsr;;
-            [Bb]abel) start_babel;;
-            *) die "Unknown routing protocol $AHCP_ROUTING_PROTOCOL";;
-        esac;;
+        add_addresses
+        nameserver_start
+        ;;
     stop)
-        case ${AHCP_ROUTING_PROTOCOL:-static} in
-            static) stop_static;;
-            OLSR) stop_olsr;;
-            [Bb]abel) stop_babel;;
-            *) die "Unknown routing protocol $AHCP_ROUTING_PROTOCOL";;
-        esac;;
-    start-ipv4)
-        add_ipv4_addresses
-        case ${AHCP_ROUTING_PROTOCOL:-static} in
-            [Bb]abel) kill -USR2 $(cat "$babel_pidfile");;
-        esac;;
-    stop-ipv4)
-        del_ipv4_addresses
-        case ${AHCP_ROUTING_PROTOCOL:-static} in
-            [Bb]abel) kill -USR2 $(cat "$babel_pidfile");;
-        esac;;
+        nameserver_stop
+        del_addresses
+        ;;
+    *)
+        die "$usage"
+        ;;
 esac
 
-if [ -x /etc/ahcp/ahcp-local.sh ]; then
-    /etc/ahcp/ahcp-local.sh $1
-fi
+[ -x /etc/ahcp/ahcp-local.sh ] && /etc/ahcp/ahcp-local.sh $1
+
+exit 0

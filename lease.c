@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2008 by Juliusz Chroboczek
+Copyright (c) 2008, 2009 by Juliusz Chroboczek
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -34,329 +34,366 @@ THE SOFTWARE.
 #include <arpa/inet.h>
 
 #include "ahcpd.h"
+#include "monotonic.h"
 #include "lease.h"
 
-#ifdef NO_STATEFUL_SERVER
+#ifdef NO_SERVER
 
 int
-lease_init(const char *dir, unsigned int first, unsigned int last)
+lease_init(const char *dir,
+           const unsigned char *first, const unsigned char *last, int debug)
 {
     return -1;
 }
 
 int
-take_lease(const unsigned char *client_id, int client_id_len,
+take_lease(const unsigned char *client_id, int client_len,
            const unsigned char *suggested_ipv4,
-           unsigned char *ipv4_return, unsigned short *lease_time)
+           unsigned char *ipv4_return, unsigned *lease_time, int commit)
 {
     return -1;
 }
 
 int
-release_lease(const unsigned char *ipv4,
-              const unsigned char *client_id, int client_id_len)
+release_lease(const unsigned char *client_id, int client_len,
+              const unsigned char *ipv4)
 {
     return -1;
 }
 
 #else
 
-#define MAX_LEASE_TIME 3600
-#define LEASE_GRACE_TIME 600
-#define LEASE_PURGE_TIME (15 * 24 * 3600)
-
-#define MAX_LEASE_HINTS 256
+#define LEASE_GRACE_TIME 666
+#define LEASE_PURGE_TIME (16 * 24 * 3600 + 666)
 
 static unsigned int first_address = 0, last_address = 0;
 const char *lease_directory = NULL;
 
-/* A table mapping known ids to IPs.  It's only used as a hint: if it
-   gets corrupted, clients might not get the same IP as last time, but
-   everything will still be safe. */
+/* A table mapping known IPs to leases.  If an entry is missing, everything
+   is still safe, although we might be unable to give out leases in some
+   cases; however, if it is incorrect, then we might incorrectly expire
+   relative leases. */
 
-struct lease_hint {
+#define MAX_LEASE_ENTRIES 16384
+
+struct lease_entry {
     unsigned char *id;
     int id_len;
-    unsigned int address;
+    unsigned address;
+    unsigned lease_orig;        /* real time, 0 if unknown */
+    unsigned lease_time;
+    time_t lease_end_m;         /* monotonic time, may be negative if expired */
 };
 
-static struct lease_hint *hints = NULL;
+static struct lease_entry *entries = NULL;
 
-static int numhints = 0;
-static int maxhints = 0;
+static int numentries = 0;
+static int maxentries = 0;
+
+static unsigned char *
+address_ipv4(unsigned a, unsigned char *ipv4)
+{
+    a = htonl(a);
+    memcpy(ipv4, &a, 4);
+    return ipv4;
+}
+
+static unsigned
+ipv4_address(const unsigned char *ipv4)
+{
+    unsigned a;
+    memcpy(&a, ipv4, 4);
+    return ntohl(a);
+}
 
 static int
-hint_match(struct lease_hint *hint, const unsigned char *id, int id_len)
+entry_match(struct lease_entry *entry, const unsigned char *id, int id_len)
 {
-    if(hint->id == NULL)
+    if(entry->id == NULL)
         return 0;
 
-    return (hint->id_len == id_len && memcmp(hint->id, id, id_len) == 0);
+    return (entry->id_len == id_len && memcmp(entry->id, id, id_len) == 0);
+}
+
+static struct lease_entry *
+find_entry(unsigned address)
+{
+    int i;
+    for(i = 0; i < numentries; i++) {
+        if(entries[i].address == address)
+            return &entries[i];
+    }
+    return NULL;
+}
+
+static struct lease_entry *
+find_entry_by_id(const unsigned char *id, int id_len)
+{
+    int i;
+    for(i = 0; i < numentries; i++) {
+        if(entry_match(&entries[i], id, id_len))
+            return &entries[i];
+    }
+    return NULL;
 }
 
 static unsigned int
-find_hint(const unsigned char *id, int id_len)
+find_entryless(unsigned first, unsigned last)
 {
+    unsigned a;
     int i;
-    for(i = 0; i < numhints; i++) {
-        if(hint_match(&hints[i], id, id_len))
-            return hints[i].address;
+
+    for(a = first; a <= last; a++) {
+        for(i = 0; i < numentries; i++) {
+            if(entries[i].address == a)
+                break;
+        }
+        if(i >= numentries)
+            return a;
     }
     return 0;
 }
 
-static void
-add_hint(const unsigned char *id, int id_len, unsigned int address)
+struct lease_entry *
+find_oldest_entry()
 {
-    struct lease_hint *hint;
+    int i, j = -1;
+    unsigned age = 0, a;
+    struct timeval now;
+
+    gettime(&now, NULL);
+
+    for(i = 0; i < numentries; i++) {
+        if(entries[i].id == NULL)
+            continue;
+        a = now.tv_sec - entries[i].lease_end_m;
+        if(a > age) {
+            a = age;
+            j = i;
+        }
+    }
+    return j >= 0 ? &entries[j] : NULL;
+}
+
+static struct lease_entry *
+add_entry(const unsigned char *id, int id_len, unsigned int address,
+          unsigned lease_orig, unsigned lease_time, time_t lease_end_m)
+{
+    struct lease_entry *entry;
     int i;
 
-    for(i = 0; i < numhints; i++) {
-        if(hint_match(&hints[i], id, id_len)) {
-            hints[i].address = address;
-            return;
+    for(i = 0; i < numentries; i++) {
+        if(entries[i].address == address) {
+            if(!entry_match(&entries[i], id, id_len))
+                return NULL;
+            entry = &entries[i];
+            goto done;
         }
     }
 
-    hint = NULL;
-
-    for(i = 0; i < numhints; i++) {
-        if(hints[i].id == NULL) {
-            hint = &hints[i];
+    entry = NULL;
+    for(i = 0; i < numentries; i++) {
+        if(entries[i].id == NULL) {
+            entry = &entries[i];
             break;
         }
     }
 
-    if(hint == NULL) {
-        if(numhints < maxhints)
-            hint = &hints[numhints++];
+    if(entry == NULL) {
+        if(numentries >= maxentries) {
+            if(maxentries < MAX_LEASE_ENTRIES) {
+                int n = MIN(maxentries * 2, MAX_LEASE_ENTRIES);
+                struct lease_entry *new =
+                    realloc(entries, n * sizeof(struct lease_entry));
+                if(new) {
+                    entries = new;
+                    maxentries = n;
+                }
+            }
+        }
+                
+        if(numentries < maxentries)
+            entry = &entries[numentries++];
     }
 
-    if(hint == NULL) {
-        if(maxhints == 0)
-            return;
+    if(entry == NULL) {
+        entry = find_oldest_entry();
+        if(entry == NULL)
+            return NULL;
 
-        /* Flush a random hint. */
-        i = random() % maxhints;
-        free(hints[i].id);
-        hints[i].id = NULL;
-        hints[i].id_len = 0;
-        hints[i].address = 0;
-        hint = &hints[i];
+        free(entry->id);
+        entry->id = NULL;
+        entry->id_len = 0;
+        entry->address = 0;
+        entry->lease_orig = 0;
+        entry->lease_time = 0;
+        entry->lease_end_m = 0;
     }
 
-    hint->id = malloc(id_len);
-    if(hint->id == NULL)
-        return;
-    memcpy(hint->id, id, id_len);
-    hint->id_len = id_len;
-    hint->address = address;
-    return;
+    entry->id = malloc(id_len);
+    if(entry->id == NULL)
+        return NULL;
+    memcpy(entry->id, id, id_len);
+    entry->id_len = id_len;
+    entry->address = address;
+
+ done:
+    entry->lease_orig = lease_orig;
+    entry->lease_time = lease_time;
+    entry->lease_end_m = lease_end_m;
+    return entry;
 }
 
 static char *
-lease_file(const unsigned char *ipv4)
+lease_file(const unsigned char *ipv4, char *buf, int bufsize)
 {
-    char buf[255];
     const char *p;
     int n;
-    strncpy(buf, lease_directory, 255);
-    strncat(buf, "/", 255);
 
-    n = strlen(buf);
-    if(n >= 255)
+    n = strlen(lease_directory);
+    if(n >= bufsize - 2)
         return NULL;
 
-    p = inet_ntop(AF_INET, ipv4, buf + n, 254 - n);
+    memcpy(buf, lease_directory, n);
+    buf[n++] = '/';
+
+    p = inet_ntop(AF_INET, ipv4, buf + n, bufsize - n);
     if(p == NULL)
         return NULL;
 
-    return strdup(buf);
+    return buf;
 }
 
 static int
-open_lease_file(char *fn)
+close_lease_file(int fd, int modified)
 {
-    char buf[300];
     int rc;
 
-    if(strlen(fn) > 255)
-        return -1;
-
-    strncpy(buf, fn, 300);
-    strncat(buf, ".lock", 300);
-
-    rc = link(fn, buf);
-    if(rc < 0)
-        return -1;
-
-    rc = open(fn, O_RDWR);
-    if(rc < 0) {
-        int save = errno;
-        unlink(buf);
-        errno = save;
-        return -1;
+ again:
+    if(modified) {
+        rc = fsync(fd);
+        if(rc < 0) {
+            int save;
+            if(errno == EINTR) goto again;
+            save = errno;
+            close(fd);
+            errno = save;
+            return -1;
+        }
     }
 
+    rc = close(fd);
+    if(rc < 1 && errno == EINTR)
+        goto again;
     return rc;
 }
 
 static int
-create_lease_file(char *fn)
-{
-    char buft[300], buf[300];
-    int fd, rc;
-    static char *hn = NULL;
-
-    if(hn == NULL) {
-        rc = gethostname(buf, 64);
-        if(rc < 0) {
-            perror("gethostname");
-            strcpy(buf, "my-host-is-broken");
-        }
-        hn = strdup(buf);
-        if(hn == NULL)
-            return -1;
-    }
-
-    if(strlen(fn) > 255)
-        return -1;
-
-    strncpy(buf, fn, 300);
-    strncat(buf, ".lock", 300);
-
-    /* O_EXCL is unsafe over NFS, do it the hard way */
-    snprintf(buft, 300, "%s.%s.%lu", fn, hn, (unsigned long)getpid());
-    fd = open(buft, O_RDWR | O_CREAT | O_EXCL, 0644);
-    if(fd < 0) {
-        perror("creat(temp_lease_file)");
-        return -1;
-    }
-    rc = link(buft, buf);
-    if(rc < 0) {
-        int save = errno;
-        close(fd);
-        unlink(buft);
-        errno = save;
-        return -1;
-    }
-    unlink(buft);
-
-    rc = link(buf, fn);
-    if(rc < 0) {
-        int save = errno;
-        close(fd);
-        unlink(buf);
-        errno = save;
-        return -1;
-    }
-
-    return fd;
-}
-
-static int
-close_lease_file(char *fn, int fd)
-{
-    char buf[300];
-    int rc;
-
-    if(strlen(fn) > 255)
-        return -1;
-
-    rc = fsync(fd);
-    if(rc < 0) {
-        perror("fsync(lease_file");
-        /* But continue */
-    }
-
-    strncpy(buf, fn, 300);
-    strncat(buf, ".lock", 300);
-
-    rc = unlink(buf);
-    if(buf < 0)
-        perror("unlink(lease_lock)");
-
-    return close(fd);
-}
-
-static int
 read_lease_file(int fd, const unsigned char *ipv4,
-                int *lease_end_return, unsigned char *ipv4_return,
-                unsigned char *client_buf, int len)
+                unsigned *lease_orig_return, unsigned *lease_time_return,
+                unsigned char *ipv4_return,
+                unsigned char *client_buf, int client_len)
 {
-    int rc;
-    char buf[700];
-    int lease_end;
+    int rc, i;
+    struct iovec iov[2];
+    char head[20], name[INET_ADDRSTRLEN];
+    unsigned lease_orig, lease_time;
 
-    rc = read(fd, buf, 700);
+    i = 0;
+    iov[i].iov_base = head;
+    iov[i++].iov_len = 20;
+    if(client_len > 0) {
+        iov[i].iov_base = client_buf;
+        iov[i++].iov_len = client_len;
+    }
+
+    rc = readv(fd, iov, i);
     if(rc < 0) {
         perror("read(lease_file)");
         return -1;
     }
 
-    if(rc < 16 || rc >= 700) {
-        fprintf(stderr, "Truncated lease file.\n");
+    if(rc < 20 || rc > 20 + client_len) {
+        fprintf(stderr, "Truncated lease file for %s.\n", name);
         return -1;
     }
 
-    if(memcmp("AHCP\0\0\0\0", buf, 8) != 0) {
-        fprintf(stderr, "Corrupted lease file.\n");
+    if(memcmp("AHCP", head, 4) != 0) {
+        fprintf(stderr, "Corrupted lease file for %s.\n", name);
         return -1;
     }
 
-    if(ipv4 && memcmp(ipv4, buf + 8, 4) != 0) {
-        fprintf(stderr, "Mismatched lease file.\n");
+    if(memcmp("\1\0\0\0", head + 4, 4) != 0) {
+        fprintf(stderr, "Lease file %s has wrong version.\n", name);
         return -1;
     }
 
-    memcpy(&lease_end, buf + 12, 4);
-    lease_end = ntohl(lease_end);
-
-    if(client_buf) {
-        if(len < rc - 16)
-            return -1;
-        memcpy(client_buf, buf + 16, rc - 16);
+    if(ipv4 && memcmp(ipv4, head + 8, 4) != 0) {
+        fprintf(stderr, "Mismatched lease file for %s.\n", name);
+        return -1;
     }
-    if(lease_end_return)
-        *lease_end_return = lease_end;
+
+    memcpy(&lease_orig, head + 12, 4);
+    lease_orig = ntohl(lease_orig);
+
+    memcpy(&lease_time, head + 16, 4);
+    lease_time = ntohl(lease_time);
+
+    if(lease_orig_return)
+        *lease_orig_return = lease_orig;
+    if(lease_time_return)
+        *lease_time_return = lease_time;
     if(ipv4_return)
-        memcpy(ipv4_return, buf + 8, 4);
-    return rc - 16;
+        memcpy(ipv4_return, head + 8, 4);
+
+    return rc - 20;
 }
 
 static int
-write_lease_file(int fd,
-                 const unsigned char *ipv4, int lease_end,
-                 const unsigned char *client_id, int client_id_len)
+write_lease_file(int fd, const unsigned char *ipv4,
+                 unsigned lease_orig, unsigned lease_time,
+                 const unsigned char *client_id, int client_len)
 {
-    char buf[700];
+    struct iovec iov[5];
+    int i;
     int rc;
 
-    if(client_id_len > 650)
+    if(client_len > 650)
         return -1;
 
-    lease_end = htonl(lease_end);
+    lease_orig = htonl(lease_orig);
+    lease_time = htonl(lease_time);
 
-    memcpy(buf, "AHCP", 4);
-    memset(buf + 4, 0, 4);
-    memcpy(buf + 8, ipv4, 4);
-    memcpy(buf + 12, &lease_end, 4);
-    memcpy(buf + 16, client_id, client_id_len);
-    rc = write(fd, buf, 16 + client_id_len);
-    if(rc < 0) {
+    i = 0;
+    iov[i].iov_base = "AHCP\1\0\0\0";
+    iov[i++].iov_len = 8;
+    iov[i].iov_base = (void*)ipv4;
+    iov[i++].iov_len = 4;
+    iov[i].iov_base = &lease_orig;
+    iov[i++].iov_len = 4;
+    iov[i].iov_base = &lease_time;
+    iov[i++].iov_len = 4;
+    iov[i].iov_base = (void*)client_id;
+    iov[i++].iov_len = client_len;
+
+    rc = writev(fd, iov, i);
+    if(rc < 20 + client_len) {
         perror("write(lease_file)");
         return -1;
     }
+
     return 1;
 }
 
 static int
-update_lease_file(int fd, int lease_end)
+update_lease_file(int fd, unsigned lease_orig, unsigned lease_time)
 {
     off_t lrc;
-    int rc;
+    int rc, i;
+    struct iovec iov[2];
 
-    lease_end = htonl(lease_end);
+    lease_orig = htonl(lease_orig);
+    lease_time = htonl(lease_time);
 
     lrc = lseek(fd, 12, SEEK_SET);
     if(lrc < 0) {
@@ -364,8 +401,14 @@ update_lease_file(int fd, int lease_end)
         return -1;
     }
 
-    rc = write(fd, &lease_end, 4);
-    if(rc < 0) {
+    i = 0;
+    iov[i].iov_base = &lease_orig;
+    iov[i++].iov_len = 4;
+    iov[i].iov_base = &lease_time;
+    iov[i++].iov_len = 4;
+
+    rc = writev(fd, iov, i);
+    if(rc < 8) {
         perror("write(lease_file)");
         return -1;
     }
@@ -373,100 +416,329 @@ update_lease_file(int fd, int lease_end)
     return 1;
 }
 
+/* Return 1 if the file was removed. */
+
 static int
-get_lease(const unsigned char *ipv4, unsigned short lease_time,
-          const unsigned char *client_id, int client_id_len)
+purge_lease_file(char *fn, unsigned char *ipv4)
 {
-    unsigned char buf[700];
-    char *f;
     int fd, rc;
-    off_t lrc;
-    int old_lease_end, lease_end;
-    struct timeval now;
+    unsigned lease_orig, lease_time;
+    struct timeval now, real;
+    time_t stable;
+    int clock_status;
 
-    gettimeofday(&now, NULL);
-    lease_end = now.tv_sec + 1 + lease_time;
+    gettime(&now, &stable);
+    get_real_time(&real, &clock_status);
 
-    f = lease_file(ipv4);
-    if(f == NULL)
+    fd = open(fn, O_RDWR);
+    if(fd < 0)
+        return 0;
+
+    rc = read_lease_file(fd, ipv4, &lease_orig, &lease_time, NULL, NULL, 0);
+    if(rc < 0) {
+        close_lease_file(fd, 0);
+        return 0;
+    }
+
+    if(clock_status == CLOCK_TRUSTED && lease_orig > 0) {
+        if(lease_orig + lease_time + LEASE_PURGE_TIME < real.tv_sec) {
+            rc = unlink(fn);
+            if(rc < 0) perror("unlink(lease_file)");
+            close_lease_file(fd, 1);
+            return (rc >= 0);
+        }
+    }
+
+    close_lease_file(fd, 0);
+    return 0;
+}
+
+/* Make a relative lease absolute. */
+static int
+mutate_lease(char *fn, const unsigned char *ipv4, struct lease_entry *entry)
+{
+    int fd;
+    unsigned lease_orig, lease_time;
+    int rc;
+    struct timeval now, real;
+    time_t stable;
+    int clock_status;
+    time_t orig;
+    
+    gettime(&now, &stable);
+    get_real_time(&real, &clock_status);
+
+    if(clock_status != CLOCK_TRUSTED)
         return -1;
 
-    fd = open_lease_file(f);
+    if(entry && entry->address != ipv4_address(ipv4)) {
+        fprintf(stderr, "Entry mismatch when mutating!\n");
+        return -1;
+    }
+
+    fd = open(fn, O_RDWR);
+    if(fd < 0)
+        return 0;
+
+    rc = read_lease_file(fd, ipv4, &lease_orig, &lease_time, NULL, NULL, 0);
+    if(rc < 0)
+        goto fail;
+
+    if(lease_orig != 0)
+        goto fail;
+
+    if(entry && stable >= lease_time)
+        orig = real.tv_sec - (entry->lease_end_m - now.tv_sec);
+    else
+        orig = real.tv_sec;
+
+    if(orig > 1000000000 && orig <= real.tv_sec + 300)
+        lease_orig = orig;
+    else
+        lease_orig = real.tv_sec;
+
+    rc = update_lease_file(fd, lease_orig, lease_time);
+    if(rc < 0)
+        goto fail;
+
+    if(entry)
+        entry->lease_orig = lease_orig;
+
+    close_lease_file(fd, 1);
+    return 1;
+
+ fail:
+    close_lease_file(fd, 0);
+    return 0;
+}
+
+static int
+lease_expired(const unsigned char *ipv4,
+              unsigned lease_orig, unsigned lease_time)
+{
+    struct timeval now, real;
+    time_t stable;
+    int clock_status;
+    struct lease_entry *entry;
+
+    get_real_time(&real, &clock_status);
+
+    if(clock_status == CLOCK_TRUSTED && lease_orig > 0)
+        return lease_orig + LEASE_GRACE_TIME < real.tv_sec;
+
+    gettime(&now, &stable);
+
+    if(stable < lease_time)
+        return 0;
+
+    if(!ipv4)
+        return 0;
+
+    entry = find_entry(ipv4_address(ipv4));
+    if(!entry)
+        return 0;
+
+    return entry->lease_end_m + LEASE_GRACE_TIME > now.tv_sec;
+}
+
+static int
+get_lease(const unsigned char *client_id, int client_len,
+          const unsigned char *ipv4, unsigned lease_time,
+          int commit)
+{
+    unsigned char buf[512];
+    char fn[256], *p;
+    int fd, rc;
+    unsigned lease_orig, old_orig, old_time;
+    time_t lease_end_m;
+    int clock_status;
+    struct timeval now, real;
+
+    get_real_time(&real, &clock_status);
+    gettime(&now, NULL);
+
+    lease_orig = clock_status == CLOCK_TRUSTED ? real.tv_sec : 0;
+    lease_end_m = now.tv_sec + lease_time;
+
+    p = lease_file(ipv4, fn, 256);
+    if(p == NULL)
+        return -1;
+
+    fd = open(fn, commit ? O_RDWR : O_RDONLY);
     if(fd < 0) {
-        if(errno == ENOENT)
-            goto create;
+        if(errno == ENOENT) {
+            if(commit)
+                goto create;
+            else
+                return 1;
+        }
         perror("open(lease_file)");
         return -1;
     }
 
-    rc = read_lease_file(fd, ipv4, &old_lease_end, NULL, buf, 700);
+    rc = read_lease_file(fd, ipv4, &old_orig, &old_time, NULL, buf, 512);
     if(rc < 0) {
         fprintf(stderr, "Couldn't read lease file.\n");
         goto fail;
     }
 
-    if(rc == client_id_len && memcmp(buf, client_id, rc) == 0) {
-        lrc = lseek(fd, 0, SEEK_SET);
-        if(lrc < 0) {
-            perror("lseek(lease_file)");
+    if(rc == client_len && memcmp(buf, client_id, client_len) == 0) {
+        struct lease_entry *entry;
+        entry = find_entry(ipv4_address(ipv4));
+        if(!entry || !entry_match(entry, client_id, client_len)) {
+            fprintf(stderr, "Eek!  Inconsistent lease entry!\n");
             goto fail;
         }
-
-        rc = update_lease_file(fd, lease_end);
-        if(rc < 0)
-            goto fail;
-        close_lease_file(f, fd);
-        return 1;
+        /* It would be unsafe to shorten this lease's time. */
+        if(clock_status == CLOCK_TRUSTED && old_orig > 0 && lease_orig > 0)
+            lease_time = MAX(lease_time, old_orig + old_time - lease_orig);
+        else 
+            lease_time = MAX(lease_time, entry->lease_end_m - now.tv_sec);
+                           
+        if(commit) {
+            rc = update_lease_file(fd, lease_orig, lease_time);
+            if(rc < 0)
+                goto fail;
+            entry->lease_orig = lease_orig;
+            entry->lease_time = lease_time;
+            entry->lease_end_m = lease_end_m;
+        }
     } else {
-        if(old_lease_end + LEASE_GRACE_TIME < now.tv_sec) {
-            rc = unlink(f);
+        if(!lease_expired(ipv4, old_time, old_orig)) {
+            if(old_orig == 0 && clock_status == CLOCK_TRUSTED)
+                goto mutate;
+            else
+                goto fail;
+        }
+
+        if(commit) {
+            rc = unlink(fn);
             if(rc < 0) {
                 perror("unlink(lease_file)");
                 goto fail;
             }
-
-            close_lease_file(f, fd);
+            close_lease_file(fd, 1);
             goto create;
         }
-        goto fail;
     }
 
+    return close_lease_file(fd, commit);
+
+ fail:
+    close_lease_file(fd, 0);
+    return -1;
+
+ mutate:
+    close_lease_file(fd, 0);
+    mutate_lease(fn, ipv4, find_entry(ipv4_address(ipv4)));
+    return -1;
+
  create:
-    fd = create_lease_file(f);
+    fd = open(fn, O_RDWR | O_CREAT | O_EXCL, 0644);
     if(fd < 0) {
         perror("creat(lease_file)");
         return -1;
     }
 
-    rc = write_lease_file(fd, ipv4, lease_end, client_id, client_id_len);
+    rc = write_lease_file(fd, ipv4, lease_orig, lease_time,
+                          client_id, client_len);
     if(rc < 0)
         goto fail;
 
-    close_lease_file(f, fd);
+    add_entry(client_id, client_len, ipv4_address(ipv4),
+              lease_orig, lease_time, lease_end_m);
+
+    return close_lease_file(fd, 1);
+}
+
+int
+release_lease(const unsigned char *client_id, int client_len,
+              const unsigned char *ipv4)
+{
+    unsigned char buf[512];
+    char fn[256], *p;
+    int fd, rc, clock_status;
+    unsigned orig;
+    struct timeval now, real;
+    struct lease_entry *entry;
+
+    if(first_address == 0 || lease_directory == NULL)
+        return -1;
+
+    p = lease_file(ipv4, fn, 256);
+    if(p == NULL)
+        return -1;
+
+    fd = open(fn, O_RDWR);
+    if(fd < 0) {
+        perror("open(lease_file)");
+        return -1;
+    }
+
+    rc = read_lease_file(fd, ipv4, NULL, NULL, NULL, buf, 512);
+    if(rc < 0)
+        goto fail;
+
+    if(client_id) {
+        if(rc != client_len || memcmp(buf, client_id, rc) != 0)
+            goto fail;
+    }
+
+    gettime(&now, NULL);
+    get_real_time(&real, &clock_status);
+
+    if(clock_status == CLOCK_TRUSTED)
+        orig = real.tv_sec;
+    else
+        orig = 0;
+
+    rc = update_lease_file(fd, orig, 0);
+    if(rc < 0) {
+        rc = unlink(fn);
+        if(rc < 0) {
+            perror("unlink(lease_file)");
+            goto fail;
+        }
+    }
+    rc = close_lease_file(fd, 1);
+    if(rc < 0)
+        goto fail;
+
+    entry = find_entry(ipv4_address(ipv4));
+    entry->lease_orig = orig;
+    entry->lease_time = 0;
+    entry->lease_end_m = now.tv_sec;
+
     return 1;
 
  fail:
-    close_lease_file(f, fd);
+    close_lease_file(fd, 0);
     return -1;
 }
 
 int
-lease_init(const char *dir, unsigned int first, unsigned int last)
+lease_init(const char *dir,
+           const unsigned char *first, const unsigned char *last, int debug)
 {
     DIR *d;
-    char buf[256];
-    struct timeval now;
+    struct timeval now, real;
+    int clock_status;
+    unsigned fa, la;
 
-    if(first <= 0x1000000 || first >= last)
+    fa = ipv4_address(first);
+    la = ipv4_address(last);
+
+    if(fa <= 0x1000000 || fa >= la)
         return -1;
 
-    hints = calloc(MAX_LEASE_HINTS, sizeof(struct lease_hint));
-    if(hints == NULL)
+    entries = malloc(16 * sizeof(struct lease_entry));
+    if(entries == NULL)
         return -1;
-    numhints = 0;
-    maxhints = MAX_LEASE_HINTS;
+    numentries = 0;
+    maxentries = 16;
 
-    gettimeofday(&now, NULL);
+    gettime(&now, NULL);
+    get_real_time(&real, &clock_status);
 
     d = opendir(dir);
     if(d == NULL) {
@@ -476,154 +748,154 @@ lease_init(const char *dir, unsigned int first, unsigned int last)
 
     while(1) {
         struct dirent *e;
-        unsigned char ipv4[4], client_buf[700];
-        unsigned int a;
-        int lease_end, fd, rc;
+        unsigned char ipv4[4], client_buf[512];
+        char name[INET_ADDRSTRLEN], fn[256];
+        const char *p;
+        struct lease_entry *entry;
+        unsigned lease_orig, lease_time;
+        int fd, rc, len;
 
         e = readdir(d);
         if(e == NULL) break;
         if(e->d_name[0] == '.')
             continue;
-        strncpy(buf, dir, 255);
-        strncat(buf, "/", 255);
-        strncat(buf, e->d_name, 255);
-        buf[255] = '\0';
-        /* No need to take a lock -- if there's a race condition, we'll just
-           get a wrong hint.  And we take a lock below before purging. */
-        fd = open(buf, O_RDONLY);
+
+        rc = snprintf(fn, 256, "%s/%s", dir, e->d_name);
+        if(rc < 0 || rc >= 256) {
+            fprintf(stderr, "Couldn't format filename %s/%s.\n",
+                    dir, e->d_name);
+            continue;
+        }
+
+        fd = open(fn, O_RDONLY);
         if(fd < 0) {
             fprintf(stderr, "Inaccessible lease file %s.\n", e->d_name);
             continue;
         }
-        rc = read_lease_file(fd, NULL, &lease_end, ipv4, client_buf, 700);
+        len = read_lease_file(fd, NULL, &lease_orig, &lease_time,
+                              ipv4, client_buf, 512);
         close(fd);
-        if(rc < 0) {
-            fprintf(stderr, "Corrupted lease file %s.\n", e->d_name);
+
+        if(len < 0) {
+            fprintf(stderr, "Corrupted lease file %s.\n", fn);
             continue;
         }
 
-        if(lease_end + LEASE_PURGE_TIME < now.tv_sec) {
-            /* Take lock */
-            fd = open_lease_file(buf);
-            if(fd < 0)
-                continue;
-            rc = read_lease_file(fd, NULL, &lease_end, NULL, NULL, 0);
-            if(rc >= 0) {
-                /* Check for race */
-                if(lease_end + LEASE_PURGE_TIME < now.tv_sec)
-                    unlink(buf);
+        p = inet_ntop(AF_INET, ipv4, name, INET_ADDRSTRLEN);
+        if(p == NULL) {
+            fprintf(stderr, "Couldn't format address.\n");
+            continue;
+        }
+
+        if(strcmp(p, e->d_name) != 0) {
+            fprintf(stderr, "Mis-named lease file %s (should be %s).\n",
+                    fn, p);
+            continue;
+        }
+
+        if(debug)
+            printf("Lease file %s: %u %u.\n",
+                   e->d_name, lease_orig, lease_time);
+
+        if(clock_status == CLOCK_TRUSTED) {
+            if(lease_expired(NULL, lease_orig, lease_time)) {
+                rc = purge_lease_file(fn, ipv4);
+                if(rc > 0)
+                    continue;
             }
-            close_lease_file(buf, fd);
-            continue;
         }
 
-        memcpy(&a, ipv4, 4);
-        a = ntohl(a);
+        entry = add_entry(client_buf, len, ipv4_address(ipv4),
+                          lease_orig, lease_time, now.tv_sec + lease_time);
 
-        add_hint(client_buf, rc, a);
+        if(entry && clock_status == CLOCK_TRUSTED) {
+            if(lease_orig == 0)
+                mutate_lease(fn, ipv4, entry);
+        }
     }
     closedir(d);
 
+    if(numentries >= MAX_LEASE_ENTRIES) {
+        fprintf(stderr, "Warning: lease index full.\n"
+                "Perhaps you should recompile "
+                "with a larger value for MAX_LEASE_ENTRIES?");
+    }
+
     lease_directory = dir;
-    first_address = first;
-    last_address = last;
+    first_address = fa;
+    last_address = la;
 
     return 1;
 }
 
 int
-release_lease(const unsigned char *ipv4,
-              const unsigned char *client_id, int client_id_len)
-{
-    unsigned char buf[700];
-    char *f;
-    int fd, rc;
-    struct timeval now;
-
-    if(first_address == 0 || lease_directory == NULL)
-        return -1;
-
-    f = lease_file(ipv4);
-    if(f == NULL)
-        return -1;
-
-    fd = open_lease_file(f);
-    if(fd < 0) {
-        perror("open(lease_file)");
-        return -1;
-    }
-
-    rc = read_lease_file(fd, ipv4, NULL, NULL, buf, 700);
-    if(rc < 0) {
-        fprintf(stderr, "Couldn't read lease file.\n");
-        goto fail;
-    }
-
-    if(client_id) {
-        if(rc != client_id_len || memcmp(buf, client_id, rc) != 0)
-            goto fail;
-    }
-
-    gettimeofday(&now, NULL);
-
-    rc = update_lease_file(fd, now.tv_sec);
-    if(rc < 0) {
-        rc = unlink(f);
-        if(rc < 0) {
-            perror("unlink(lease_file)");
-            goto fail;
-        }
-    }
-
-    close_lease_file(f, fd);
-    return 1;
-
- fail:
-    close_lease_file(f, fd);
-    return -1;
-}
-
-int
-take_lease(const unsigned char *client_id, int client_id_len,
+take_lease(const unsigned char *client_id, int client_len,
            const unsigned char *suggested_ipv4,
-           unsigned char *ipv4_return, unsigned short *lease_time)
+           unsigned char *ipv4_return, unsigned *lease_time, int commit)
 {
+    unsigned int a, a0;
+    unsigned time;
+    struct lease_entry *entry;
     unsigned char ipv4[4];
-    int rc;
-    unsigned int a, an, a0;
-    unsigned short time;
+    struct timeval now, real;
+    int clock_status;
+    time_t stable;
 
     if(first_address == 0 || lease_directory == NULL)
         return -1;
 
-    if(client_id_len <= 2)
+    if(client_len < 1)
         return -1;
+
+    gettime(&now, &stable);
+    get_real_time(&real, &clock_status);
 
     time = *lease_time;
     if(time > MAX_LEASE_TIME)
         time = MAX_LEASE_TIME;
+    if(clock_status != CLOCK_TRUSTED && time > MAX_RELATIVE_LEASE_TIME)
+        time = MAX_RELATIVE_LEASE_TIME;
+    a0 = 0;
 
     if(suggested_ipv4) {
-        memcpy(&a0, suggested_ipv4, 4);
-        a0 = ntohl(a0);
-    } else {
-        a0 = find_hint(client_id, client_id_len);
+        a0 = ipv4_address(suggested_ipv4);
+        entry = find_entry(a0);
+        if(entry) {
+            if(!entry_match(entry, client_id, client_len) &&
+               !lease_expired(suggested_ipv4,
+                              entry->lease_orig, entry->lease_time))
+                a0 = 0;
+        }
+    }
+        
+    if(a0 < first_address || a0 > last_address) {
+        entry = find_entry_by_id(client_id, client_len);
+        if(entry)
+            a0 = entry->address;
+    }
+
+    if(a0 < first_address || a0 > last_address)
+        a0 = find_entryless(first_address, last_address);
+
+    if(a0 < first_address || a0 > last_address) {
+        entry = find_oldest_entry();
+        if(entry)
+            a0 = entry->address;
     }
 
     if(a0 < first_address || a0 > last_address)
         a0 = first_address;
 
     a = a0;
-
     do {
+        int rc;
+
         if(a > last_address)
             a = first_address;
 
-        an = htonl(a);
-        memcpy(ipv4, &an, 4);
-        rc = get_lease(ipv4, time, client_id, client_id_len);
+        rc = get_lease(client_id, client_len, address_ipv4(a, ipv4),
+                       time, commit);
         if(rc >= 0) {
-            add_hint(client_id, client_id_len, a);
             memcpy(ipv4_return, ipv4, 4);
             *lease_time = time;
             return 1;
