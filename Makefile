@@ -34,7 +34,7 @@ install.minimal: all
 	mkdir -p $(TARGET)$(PREFIX)/bin/
 	-rm -f $(TARGET)$(PREFIX)/bin/ahcpd
 	cp ahcpd $(TARGET)$(PREFIX)/bin/
-	mkdir -p /etc/ahcp/
+	mkdir -p $(TARGET)/etc/ahcp/
 	-rm -f $(TARGET)/etc/ahcp/ahcp-config.sh
 	cp ahcp-config.sh $(TARGET)/etc/ahcp/
 	chmod +x $(TARGET)/etc/ahcp/ahcp-config.sh
