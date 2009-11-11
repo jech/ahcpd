@@ -126,7 +126,7 @@ my_ipv4(char **interfaces)
     
 /* Uses a static buffer. */
 char *
-format_prefix_list(struct prefix_list *p, int kind)
+format_list(struct prefix_list *p, int kind)
 {
     static char buf[120];
     int i, j, k;
@@ -287,19 +287,19 @@ run_script(const char *action, struct config_data *config, char **interfaces)
         setenv("AHCP_DEBUG_LEVEL", buf, 1);
         if(config->our_ipv6_address && (af & 2))
             setenv("AHCP_IPv6_ADDRESS",
-                   format_prefix_list(config->our_ipv6_address, IPv6_ADDRESS),
+                   format_list(config->our_ipv6_address, IPv6_ADDRESS),
                    1);
         if(config->ipv4_address && (af & 1))
             setenv("AHCP_IPv4_ADDRESS",
-                   format_prefix_list(config->ipv4_address, IPv4_ADDRESS), 1);
+                   format_list(config->ipv4_address, IPv4_ADDRESS), 1);
 
         if(config->name_server && !nodns)
             setenv("AHCP_NAMESERVER",
-                   format_prefix_list(config->name_server, ADDRESS), 1);
+                   format_list(config->name_server, ADDRESS), 1);
 
         if(config->ntp_server)
             setenv("AHCP_NTP_SERVER",
-                   format_prefix_list(config->ntp_server, ADDRESS), 1);
+                   format_list(config->ntp_server, ADDRESS), 1);
 
         if(debug_level >= 1)
             printf("Running ``%s %s''\n", config_script, action);
