@@ -160,6 +160,14 @@ format_prefix_list(struct prefix_list *p, int kind)
             if(k < 0 || k >= 120 - j) return NULL;
             j += k;
             break;
+        case IPv4_PREFIX:
+            r = inet_ntop(AF_INET, p->l[i].p + 12, buf + j, 120 - j);
+            if(r == NULL) return NULL;
+            j += strlen(r);
+            k = snprintf(buf + j, 120 - j, "/%u", p->l[i].plen - 96);
+            if(k < 0 || k >= 120 - j) return NULL;
+            j += k;
+            break;
         default: abort();
         }
         if(j >= 119) return NULL;
@@ -216,6 +224,14 @@ parse_p6(struct prefix *p, const unsigned char *data)
     p->plen = data[16];
 }
 
+static void
+parse_p4(struct prefix *p, const unsigned char *data)
+{
+    memcpy(p->p, v4prefix, 12);
+    memcpy(p->p + 12, data, 4);
+    p->plen = data[16] + 96;
+}
+
 static struct prefix_list *
 parse_list(const unsigned char *data, int len, int kind)
 {
@@ -225,8 +241,9 @@ parse_list(const unsigned char *data, int len, int kind)
 
     switch(kind) {
     case IPv6_ADDRESS: size = 16; parser = parse_a6; break;
-    case IPv6_PREFIX: size = 17; parser = parse_p6; break;
     case IPv4_ADDRESS: size = 4; parser = parse_a4; break;
+    case IPv6_PREFIX: size = 17; parser = parse_p6; break;
+    case IPv4_PREFIX: size = 5; parser = parse_p4; break;
     default: abort();
     }
 
