@@ -54,7 +54,7 @@ unsigned int protocol_port = 5359;
 int protocol_socket = -1;
 unsigned char myid[8];
 char *unique_id_file = "/var/lib/ahcpd-unique-id";
-int nodns = 0, af = 3;
+int nodns = 0, af = 3, request_prefix_delegation = 0;
 char *config_script = "/etc/ahcp/ahcp-config.sh";
 int debug_level = 1;
 int do_daemonise = 0;

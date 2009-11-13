@@ -293,6 +293,17 @@ run_script(const char *action, struct config_data *config, char **interfaces)
             setenv("AHCP_IPv4_ADDRESS",
                    format_list(config->ipv4_address, IPv4_ADDRESS), 1);
 
+        if(config->ipv6_prefix_delegation && (af & 2))
+            setenv("AHCP_IPv6_PREFIX_DELEGATION",
+                   format_list(config->ipv6_prefix_delegation,
+                                      IPv6_PREFIX),
+                   1);
+        if(config->ipv4_prefix_delegation && (af & 2))
+            setenv("AHCP_IPv4_PREFIX_DELEGATION",
+                   format_list(config->ipv4_prefix_delegation,
+                                      IPv4_PREFIX),
+                   1);
+
         if(config->name_server && !nodns)
             setenv("AHCP_NAMESERVER",
                    format_list(config->name_server, ADDRESS), 1);
@@ -343,6 +354,8 @@ free_config_data(struct config_data *config)
     free_prefix_list(config->ipv4_prefix);
     free_prefix_list(config->ipv6_address);
     free_prefix_list(config->ipv4_address);
+    free_prefix_list(config->ipv6_prefix_delegation);
+    free_prefix_list(config->ipv4_prefix_delegation);
     free_prefix_list(config->name_server);
     free_prefix_list(config->ntp_server);
     free_prefix_list(config->our_ipv6_address);
@@ -366,6 +379,8 @@ copy_config_data(struct config_data *config)
     COPY(ipv4_prefix);
     COPY(ipv6_address);
     COPY(ipv4_address);
+    COPY(ipv6_prefix_delegation);
+    COPY(ipv4_prefix_delegation);
     COPY(name_server);
     COPY(ntp_server);
     COPY(our_ipv6_address);
@@ -380,7 +395,9 @@ config_data_compatible(struct config_data *config1, struct config_data *config2)
 
     if(!!config1->ipv4_address != !!config2->ipv4_address ||
        !!config1->ipv6_address != !!config2->ipv6_address ||
-       !!config1->ipv6_prefix != !!config2->ipv6_prefix)
+       !!config1->ipv6_prefix != !!config2->ipv6_prefix ||
+       !!config1->ipv4_prefix_delegation != !!config2->ipv4_prefix_delegation ||
+       !!config1->ipv6_prefix_delegation != !!config2->ipv6_prefix_delegation)
         return 0;
 
     if(config1->ipv4_address) {
@@ -395,6 +412,18 @@ config_data_compatible(struct config_data *config1, struct config_data *config2)
 
     if(config1->ipv6_prefix) {
         if(!prefix_list_eq(config1->ipv6_prefix, config2->ipv6_prefix) != 0)
+            return 0;
+    }
+
+    if(config1->ipv4_prefix_delegation) {
+        if(!prefix_list_eq(config1->ipv4_prefix_delegation,
+                           config2->ipv4_prefix_delegation) != 0)
+            return 0;
+    }
+
+    if(config1->ipv6_prefix_delegation) {
+        if(!prefix_list_eq(config1->ipv6_prefix_delegation,
+                           config2->ipv6_prefix_delegation) != 0)
             return 0;
     }
 
@@ -521,13 +550,26 @@ parse_message(int configure, const unsigned char *data, int len,
                 expires = secs;
             else
                 expires = MIN(expires, secs);
-        } else if(opt == OPT_IPv6_PREFIX) {
+        } else if(opt == OPT_IPv6_PREFIX || opt == OPT_IPv6_PREFIX_DELEGATION) {
+            struct prefix_list *value;
             if(olen % 17 != 0) {
                 fprintf(stderr, "Unexpected length for prefix.\n");
                 goto fail;
             }
 
-            config->ipv6_prefix = parse_list(body + i + 2, olen, IPv6_PREFIX);
+            value = parse_list(body + i + 2, olen, IPv6_PREFIX);
+            if(opt == OPT_IPv6_PREFIX)
+                config->ipv6_prefix = value;
+            else
+                config->ipv6_prefix_delegation = value;
+        } else if(opt == OPT_IPv4_PREFIX_DELEGATION) {
+            if(olen % 5 != 0) {
+                fprintf(stderr, "Unexpected length for prefix.\n");
+                goto fail;
+            }
+
+            config->ipv4_prefix_delegation =
+                    parse_list(body + i + 2, olen, IPv4_PREFIX);
         } else if(opt == OPT_MY_IPv6_ADDRESS || opt == OPT_IPv6_ADDRESS ||
                   opt == OPT_NAME_SERVER || opt == OPT_NTP_SERVER) {
             struct prefix_list *value;
@@ -700,11 +742,19 @@ query_body(unsigned char opcode, int time, const unsigned char *ipv4,
             memcpy(buf + i, ipv4, 4);
             i += 4;
         }
+        if(request_prefix_delegation) {
+            buf[i++] = OPT_IPv4_PREFIX_DELEGATION; if(i >= buflen) goto fail;
+            buf[i++] = 0; if(i >= buflen) goto fail;
+        }
     }
 
     if((af & 2)) {
-        buf[i++] = OPT_IPv6_PREFIX; if(i >= buflen) goto fail;
+        buf[i++] = OPT_IPv6_PREFIX_DELEGATION; if(i >= buflen) goto fail;
         buf[i++] = 0; if(i >= buflen) goto fail;
+        if(request_prefix_delegation) {
+            buf[i++] = OPT_IPv6_PREFIX_DELEGATION; if(i >= buflen) goto fail;
+            buf[i++] = 0; if(i >= buflen) goto fail;
+        }
     }
 
     /* Set up header */

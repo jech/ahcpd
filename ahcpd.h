@@ -26,7 +26,7 @@ THE SOFTWARE.
 #define MAX(x,y) ((x)<=(y)?(y):(x))
 #define MIN(x,y) ((x)<=(y)?(x):(y))
 
-extern int nodns, af;
+extern int nodns, af, request_prefix_delegation;
 extern char *config_script;
 extern int debug_level;
 extern unsigned char myid[8];
