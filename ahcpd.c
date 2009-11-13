@@ -125,7 +125,7 @@ main(int argc, char **argv)
 
     
     while(1) {
-        opt = getopt(argc, argv, "m:p:nN46s:d:i:t:S:DL:I:");
+        opt = getopt(argc, argv, "m:p:nN46s:d:i:t:P:S:DL:I");
         if(opt < 0)
             break;
 
@@ -163,6 +163,9 @@ main(int argc, char **argv)
             lease_time = atoi(optarg);
             if(lease_time < 300 || lease_time > 365 * 24 * 3600)
                 goto usage;
+            break;
+        case 'P':
+            request_prefix_delegation = 1;
             break;
 #ifndef NO_SERVER
         case 'S': {
