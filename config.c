@@ -749,7 +749,7 @@ query_body(unsigned char opcode, int time, const unsigned char *ipv4,
     }
 
     if((af & 2)) {
-        buf[i++] = OPT_IPv6_PREFIX_DELEGATION; if(i >= buflen) goto fail;
+        buf[i++] = OPT_IPv6_PREFIX; if(i >= buflen) goto fail;
         buf[i++] = 0; if(i >= buflen) goto fail;
         if(request_prefix_delegation) {
             buf[i++] = OPT_IPv6_PREFIX_DELEGATION; if(i >= buflen) goto fail;
