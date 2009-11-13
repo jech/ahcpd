@@ -229,7 +229,7 @@ parse_p4(struct prefix *p, const unsigned char *data)
 {
     memcpy(p->p, v4prefix, 12);
     memcpy(p->p + 12, data, 4);
-    p->plen = data[16] + 96;
+    p->plen = data[4] + 96;
 }
 
 static struct prefix_list *
