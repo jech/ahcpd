@@ -779,7 +779,7 @@ main(int argc, char **argv)
                     fprintf(stderr, "Couldn't build body.\n");
                     break;
                 }
-                if(state == STATE_REQUESTING && count > 4) {
+                if(state == STATE_REQUESTING && count > 7) {
                     if(debug_level >= 2)
                         printf("Giving up on request.\n");
                     server_hopcount = 0;
