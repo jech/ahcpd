@@ -40,8 +40,8 @@ THE SOFTWARE.
 #include "monotonic.h"
 #include "protocol.h"
 #include "transport.h"
-#include "configure.h"
 #include "config.h"
+#include "configure.h"
 #include "lease.h"
 
 #define BUFFER_SIZE 2048
@@ -694,15 +694,7 @@ main(int argc, char **argv)
 
                         config =
                             make_config_data(client_lease_time,
-                                             ipv4,
-                                             memcmp(server_config->ipv6_prefix,
-                                                    zeroes, 16) == 0 ?
-                                             NULL :
-                                             server_config->ipv6_prefix,
-                                             server_config->name_server,
-                                             server_config->name_server_len,
-                                             server_config->ntp_server,
-                                             server_config->ntp_server_len,
+                                             ipv4, server_config,
                                              interfaces);
                         if(config == NULL) {
                             fprintf(stderr, "Couldn't build config data.\n");

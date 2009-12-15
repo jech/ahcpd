@@ -40,8 +40,9 @@ THE SOFTWARE.
 
 #include "ahcpd.h"
 #include "monotonic.h"
-#include "configure.h"
+#include "config.h"
 #include "protocol.h"
+#include "configure.h"
 
 struct config_data *config_data = NULL;
 const unsigned char v4prefix[16] = 
@@ -432,9 +433,7 @@ config_data_compatible(struct config_data *config1, struct config_data *config2)
 
 struct config_data *
 make_config_data(int expires,
-                 unsigned char *ipv4, unsigned char *ipv6_prefix,
-                 unsigned char *name_server, int name_server_len,
-                 unsigned char *ntp_server, int ntp_server_len,
+                 unsigned char *ipv4, struct server_config *server_config,
                  char **interfaces)
 {
     struct config_data *config;
@@ -459,16 +458,21 @@ make_config_data(int expires,
     if(ipv4)
         config->ipv4_address = parse_list(ipv4, 4, IPv4_ADDRESS);
 
-    if(ipv6_prefix) {
-        config->ipv6_prefix = parse_list(ipv6_prefix, 16, IPv6_ADDRESS);
+    if(server_config->ipv6_prefix && server_config->ipv6_prefix[0] != 0) {
+        config->ipv6_prefix = parse_list(server_config->ipv6_prefix, 16,
+                                         IPv6_ADDRESS);
         config->ipv6_prefix->l[0].plen = 64;
     }
 
-    if(name_server_len > 0)
-        config->name_server = parse_list(name_server, name_server_len, IPv6_ADDRESS);
+    if(server_config->name_server_len > 0)
+        config->name_server = parse_list(server_config->name_server,
+                                         server_config->name_server_len,
+                                         IPv6_ADDRESS);
 
-    if(ntp_server_len > 0)
-        config->ntp_server = parse_list(ntp_server, ntp_server_len, IPv6_ADDRESS);
+    if(server_config->ntp_server_len > 0)
+        config->ntp_server = parse_list(server_config->ntp_server,
+                                        server_config->ntp_server_len,
+                                        IPv6_ADDRESS);
 
     my_address = my_ipv4(interfaces);
     if(my_address)

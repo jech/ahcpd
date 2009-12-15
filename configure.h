@@ -62,11 +62,7 @@ int config_data_compatible(struct config_data *config1,
 struct config_data *copy_config_data(struct config_data *config);
 struct config_data *make_config_data(int expires,
                                      unsigned char *ipv4,
-                                     unsigned char *ipv6_prefix,
-                                     unsigned char *name_server,
-                                     int name_server_len,
-                                     unsigned char *ntp_server,
-                                     int ntp_server_len,
+                                     struct server_config *server_config,
                                      char **interfaces);
 
 struct config_data *parse_message(int configure,
