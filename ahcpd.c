@@ -41,6 +41,7 @@ THE SOFTWARE.
 #include "protocol.h"
 #include "transport.h"
 #include "configure.h"
+#include "config.h"
 #include "lease.h"
 
 #define BUFFER_SIZE 2048
@@ -108,14 +109,6 @@ main(int argc, char **argv)
     int opt, fd, rc, i, net;
     unsigned int seed;
     int client = 1;
-#ifndef NO_SERVER
-    int server = 0;
-    const char *lease_dir = NULL;
-    unsigned char name_server[80], ntp_server[80];
-    unsigned int name_server_len = 0, ntp_server_len = 0;
-    unsigned char server_ipv6_prefix[16] = {0};
-    unsigned char lease_first[4], lease_last[4];
-#endif
     enum state state = STATE_IDLE;
     int count = 0;
     int server_hopcount = 0;
@@ -170,33 +163,38 @@ main(int argc, char **argv)
 #ifndef NO_SERVER
         case 'S': {
             char *p;
-            if(server)
+            if(server_config)
                 goto usage;
+            server_config = calloc(1, sizeof(struct server_config));
+            if(server_config == NULL) {
+                perror("malloc(server_config)");
+                exit(1);
+            }
             p = strtok(optarg, ",");
             if(p) {
                 if(p[0] != '\0') {
-                    rc = inet_pton(AF_INET6, p, server_ipv6_prefix);
+                    rc = inet_pton(AF_INET6, p, server_config->ipv6_prefix);
                     if(rc <= 0) goto usage;
                 }
                 p = strtok(NULL, ",");
             }
             if(p) {
                 if(p[0] != '\0') {
-                    rc = inet_pton(AF_INET, p, lease_first);
+                    rc = inet_pton(AF_INET, p, server_config->lease_first);
                     if(rc <= 0) goto usage;
                 }
                 p = strtok(NULL, ",");
             }
             if(p) {
                 if(p[0] != '\0') {
-                    rc = inet_pton(AF_INET, p, lease_last);
+                    rc = inet_pton(AF_INET, p, server_config->lease_last);
                     if(rc <= 0) goto usage;
                 }
                 p = strtok(NULL, ",");
             }
             if(p && *p) {
                 if(p[0] != '\0') {
-                    lease_dir = strdup(p);
+                    server_config->lease_dir = strdup(p);
                 }
                 p = strtok(NULL, ",");
             }
@@ -205,14 +203,14 @@ main(int argc, char **argv)
                 if(p[0] != '\0') {
                     rc = inet_pton(AF_INET, p, ipv4);
                     if(rc > 0) {
-                        memcpy(name_server, v4prefix, 12);
-                        memcpy(name_server + 12, ipv4, 4);
-                        name_server_len = 16;
+                        memcpy(server_config->name_server, v4prefix, 12);
+                        memcpy(server_config->name_server + 12, ipv4, 4);
+                        server_config->name_server_len = 16;
                     } else {
-                        rc = inet_pton(AF_INET6, p, name_server);
+                        rc = inet_pton(AF_INET6, p, server_config->name_server);
                         if(rc <= 0)
                             goto usage;
-                        name_server_len = 16;
+                        server_config->name_server_len = 16;
                     }
                 }
                 p = strtok(NULL, ",");
@@ -222,14 +220,14 @@ main(int argc, char **argv)
                 if(p[0] != '\0') {
                     rc = inet_pton(AF_INET, p, ipv4);
                     if(rc > 0) {
-                        memcpy(ntp_server, v4prefix, 12);
-                        memcpy(ntp_server + 12, ipv4, 4);
-                        ntp_server_len = 16;
+                        memcpy(server_config->ntp_server, v4prefix, 12);
+                        memcpy(server_config->ntp_server + 12, ipv4, 4);
+                        server_config->ntp_server_len = 16;
                     } else {
-                        rc = inet_pton(AF_INET6, p, ntp_server);
+                        rc = inet_pton(AF_INET6, p, server_config->ntp_server);
                         if(rc <= 0)
                             goto usage;
-                        ntp_server_len = 16;
+                        server_config->ntp_server_len = 16;
                     }
                 }
                 p = strtok(NULL, ",");
@@ -237,7 +235,6 @@ main(int argc, char **argv)
             if(p)
                 goto usage;
             client = 0;
-            server = 1;
             break;
         }
 #endif
@@ -394,8 +391,10 @@ main(int argc, char **argv)
  unique_id_done:
 
 #ifndef NO_SERVER
-    if(lease_dir) {
-        rc = lease_init(lease_dir, lease_first, lease_last, debug_level >= 2);
+    if(server_config) {
+        rc = lease_init(server_config->lease_dir,
+                        server_config->lease_first, server_config->lease_last,
+                        debug_level >= 2);
         if(rc < 0) {
             fprintf(stderr, "Couldn't initialise lease database.\n");
             goto fail;
@@ -496,7 +495,7 @@ main(int argc, char **argv)
                    (int)clock_status, (long)stable);
             printf("Forwarder forwarding.\n");
 #ifndef NO_SERVER
-            if(server)
+            if(server_config)
                 printf("Server serving.\n");
 #endif
             if(client) {
@@ -639,7 +638,7 @@ main(int argc, char **argv)
                 }
 
 #ifndef NO_SERVER
-                if(server) {
+                if(server_config) {
                     if(body[0] == AHCP_DISCOVER ||
                        body[0] == AHCP_REQUEST ||
                        body[0] == AHCP_RELEASE) {
@@ -680,7 +679,7 @@ main(int argc, char **argv)
                             continue;
                         }
 
-                        if(lease_dir) {
+                        if(server_config) {
                             rc = take_lease(buf + 8, 8,
                                             memcmp(ipv4, zeroes, 4) == 0 ?
                                             ipv4 : NULL,
@@ -693,15 +692,18 @@ main(int argc, char **argv)
                             rc = -1;
                         }
 
-                        config = make_config_data(client_lease_time,
-                                                  ipv4,
-                                                  memcmp(server_ipv6_prefix,
-                                                         zeroes, 16) == 0 ?
-                                                  NULL :
-                                                  server_ipv6_prefix,
-                                                  name_server, name_server_len,
-                                                  ntp_server, ntp_server_len,
-                                                  interfaces);
+                        config =
+                            make_config_data(client_lease_time,
+                                             ipv4,
+                                             memcmp(server_config->ipv6_prefix,
+                                                    zeroes, 16) == 0 ?
+                                             NULL :
+                                             server_config->ipv6_prefix,
+                                             server_config->name_server,
+                                             server_config->name_server_len,
+                                             server_config->ntp_server,
+                                             server_config->ntp_server_len,
+                                             interfaces);
                         if(config == NULL) {
                             fprintf(stderr, "Couldn't build config data.\n");
                             continue;
