@@ -40,7 +40,7 @@ THE SOFTWARE.
 #include "monotonic.h"
 #include "protocol.h"
 #include "transport.h"
-#include "config.h"
+#include "configure.h"
 #include "lease.h"
 
 #define BUFFER_SIZE 2048

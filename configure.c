@@ -40,7 +40,7 @@ THE SOFTWARE.
 
 #include "ahcpd.h"
 #include "monotonic.h"
-#include "config.h"
+#include "configure.h"
 #include "protocol.h"
 
 struct config_data *config_data = NULL;
