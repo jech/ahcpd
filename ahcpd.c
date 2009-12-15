@@ -125,7 +125,7 @@ main(int argc, char **argv)
 
     
     while(1) {
-        opt = getopt(argc, argv, "m:p:nN46s:d:i:t:P:S:DL:I");
+        opt = getopt(argc, argv, "m:p:nN46s:d:i:t:P:S:DL:I:");
         if(opt < 0)
             break;
 
