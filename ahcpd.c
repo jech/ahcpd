@@ -108,7 +108,6 @@ main(int argc, char **argv)
     struct sockaddr_in6 sin6;
     int opt, fd, rc, i, net;
     unsigned int seed;
-    int client = 1;
     enum state state = STATE_IDLE;
     int count = 0;
     int server_hopcount = 0;
@@ -132,7 +131,7 @@ main(int argc, char **argv)
                 goto usage;
             break;
         case 'n':
-            client = 0;
+            client_config = 0;
             break;
         case 'N':
             nodns = 1;
@@ -234,7 +233,7 @@ main(int argc, char **argv)
             }
             if(p)
                 goto usage;
-            client = 0;
+            client_config = 0;
             break;
         }
 #endif
@@ -438,7 +437,7 @@ main(int argc, char **argv)
         count = 0;                                                      \
     } while(0)
 
-    if(client) {
+    if(client_config) {
         server_hopcount = 0;
         SWITCH(STATE_INIT);
     }
@@ -498,7 +497,7 @@ main(int argc, char **argv)
             if(server_config)
                 printf("Server serving.\n");
 #endif
-            if(client) {
+            if(client_config) {
                 printf("Client in state %d, ", (int)state);
                 if(memcmp(selected_server, zeroes, 8) != 0)
                     printf("server selected, ");

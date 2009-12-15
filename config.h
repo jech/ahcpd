@@ -32,3 +32,4 @@ struct server_config {
 extern struct server_config *server_config;
 #endif
 
+extern int client_config;

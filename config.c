@@ -25,3 +25,5 @@ THE SOFTWARE.
 #ifndef NO_SERVER
 struct server_config *server_config = NULL;
 #endif
+
+int client_config = 1;
