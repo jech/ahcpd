@@ -40,6 +40,7 @@ THE SOFTWARE.
 
 #include "ahcpd.h"
 #include "monotonic.h"
+#include "prefix.h"
 #include "config.h"
 #include "protocol.h"
 #include "configure.h"
@@ -47,29 +48,6 @@ THE SOFTWARE.
 struct config_data *config_data = NULL;
 const unsigned char v4prefix[16] = 
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0, 0, 0, 0 };
-
-#define IPv6_ADDRESS 0
-#define IPv4_ADDRESS 1
-#define ADDRESS 2
-#define IPv6_PREFIX 3
-#define IPv4_PREFIX 4
-
-static struct prefix_list *
-copy_prefix_list(struct prefix_list *l)
-{
-    struct prefix_list *c = malloc(sizeof(struct prefix_list));
-    if(c == NULL)
-        return NULL;
-    memcpy(c, l, sizeof(struct prefix_list));
-    return c;
-}
-
-static int
-prefix_list_eq(struct prefix_list *l1, struct prefix_list *l2)
-{
-    return l1->n == l2->n &&
-        memcmp(l1->l, l2->l, l1->n * sizeof(struct prefix)) == 0;
-}
 
 static int
 interface_ipv4(const char *ifname, unsigned char *addr_r)
@@ -125,143 +103,6 @@ my_ipv4(char **interfaces)
     return l;
 }
     
-/* Uses a static buffer. */
-char *
-format_list(struct prefix_list *p, int kind)
-{
-    static char buf[120];
-    int i, j, k;
-    const char *r;
-
-    j = 0;
-    for(i = 0; i < p->n; i++) {
-        switch(kind) {
-        case IPv6_ADDRESS:
-            r = inet_ntop(AF_INET6, p->l[i].p, buf + j, 120 - j);
-            if(r == NULL) return NULL;
-            j += strlen(r);
-            break;
-        case IPv4_ADDRESS:
-            r = inet_ntop(AF_INET, p->l[i].p + 12, buf + j, 120 - j);
-            if(r == NULL) return NULL;
-            j += strlen(r);
-            break;
-        case ADDRESS:
-            if(memcmp(p->l[i].p, v4prefix, 12) == 0)
-                r = inet_ntop(AF_INET, p->l[i].p + 12, buf + j, 120 - j);
-            else
-                r = inet_ntop(AF_INET6, p->l[i].p, buf + j, 120 - j);
-            j += strlen(r);
-            break;
-        case IPv6_PREFIX:
-            r = inet_ntop(AF_INET6, p->l[i].p, buf + j, 120 - j);
-            if(r == NULL) return NULL;
-            j += strlen(r);
-            k = snprintf(buf + j, 120 - j, "/%u", p->l[i].plen);
-            if(k < 0 || k >= 120 - j) return NULL;
-            j += k;
-            break;
-        case IPv4_PREFIX:
-            r = inet_ntop(AF_INET, p->l[i].p + 12, buf + j, 120 - j);
-            if(r == NULL) return NULL;
-            j += strlen(r);
-            k = snprintf(buf + j, 120 - j, "/%u", p->l[i].plen - 96);
-            if(k < 0 || k >= 120 - j) return NULL;
-            j += k;
-            break;
-        default: abort();
-        }
-        if(j >= 119) return NULL;
-        if(i + 1 < p->n)
-            buf[j++] = ' ';
-    }
-    if(j >= 120)
-        return NULL;
-    buf[j++] = '\0';
-    return buf;
-}
-
-void
-prefix_list_extract6(unsigned char *dest, struct prefix_list *p)
-{
-    if(!p || p->n == 0)
-        memset(dest, 0, 16);
-    memcpy(dest, p->l[0].p, 16);
-}
-
-void
-prefix_list_extract4(unsigned char *dest, struct prefix_list *p)
-{
-    if(!p || p->n == 0)
-        memset(dest, 0, 4);
-    memcpy(dest, p->l[0].p + 12, 4);
-}
-
-static void
-free_prefix_list(struct prefix_list *l)
-{
-    free(l);
-}
-
-static void
-parse_a6(struct prefix *p, const unsigned char *data)
-{
-    memcpy(p->p, data, 16);
-    p->plen = 0xFF;
-}
-
-static void
-parse_a4(struct prefix *p, const unsigned char *data)
-{
-    memcpy(p->p, v4prefix, 12);
-    memcpy(p->p + 12, data, 4);
-    p->plen = 0xFF;
-}
-
-static void
-parse_p6(struct prefix *p, const unsigned char *data)
-{
-    memcpy(p->p, data, 16);
-    p->plen = data[16];
-}
-
-static void
-parse_p4(struct prefix *p, const unsigned char *data)
-{
-    memcpy(p->p, v4prefix, 12);
-    memcpy(p->p + 12, data, 4);
-    p->plen = data[4] + 96;
-}
-
-static struct prefix_list *
-parse_list(const unsigned char *data, int len, int kind)
-{
-    struct prefix_list *l = calloc(1, sizeof(struct prefix_list));
-    int i, size;
-    void (*parser)(struct prefix *, const unsigned char*) = NULL;
-
-    switch(kind) {
-    case IPv6_ADDRESS: size = 16; parser = parse_a6; break;
-    case IPv4_ADDRESS: size = 4; parser = parse_a4; break;
-    case IPv6_PREFIX: size = 17; parser = parse_p6; break;
-    case IPv4_PREFIX: size = 5; parser = parse_p4; break;
-    default: abort();
-    }
-
-    if(len % size != 0)
-        return NULL;
-
-    i = 0;
-    while(i < len) {
-        if(l->n >= MAX_PREFIX)
-            break;
-        parser(&l->l[l->n], data + i * size);
-        l->n++;
-        i += size;
-    }
-    return l;
-}
-
 static int
 run_script(const char *action, struct config_data *config, char **interfaces)
 {
@@ -288,30 +129,30 @@ run_script(const char *action, struct config_data *config, char **interfaces)
         setenv("AHCP_DEBUG_LEVEL", buf, 1);
         if(config->our_ipv6_address && (af & 2))
             setenv("AHCP_IPv6_ADDRESS",
-                   format_list(config->our_ipv6_address, IPv6_ADDRESS),
+                   format_prefix_list(config->our_ipv6_address, IPv6_ADDRESS),
                    1);
         if(config->ipv4_address && (af & 1))
             setenv("AHCP_IPv4_ADDRESS",
-                   format_list(config->ipv4_address, IPv4_ADDRESS), 1);
+                   format_prefix_list(config->ipv4_address, IPv4_ADDRESS), 1);
 
         if(config->ipv6_prefix_delegation && (af & 2))
             setenv("AHCP_IPv6_PREFIX_DELEGATION",
-                   format_list(config->ipv6_prefix_delegation,
+                   format_prefix_list(config->ipv6_prefix_delegation,
                                       IPv6_PREFIX),
                    1);
         if(config->ipv4_prefix_delegation && (af & 2))
             setenv("AHCP_IPv4_PREFIX_DELEGATION",
-                   format_list(config->ipv4_prefix_delegation,
+                   format_prefix_list(config->ipv4_prefix_delegation,
                                       IPv4_PREFIX),
                    1);
 
         if(config->name_server && !nodns)
             setenv("AHCP_NAMESERVER",
-                   format_list(config->name_server, ADDRESS), 1);
+                   format_prefix_list(config->name_server, ADDRESS), 1);
 
         if(config->ntp_server)
             setenv("AHCP_NTP_SERVER",
-                   format_list(config->ntp_server, ADDRESS), 1);
+                   format_prefix_list(config->ntp_server, ADDRESS), 1);
 
         if(debug_level >= 1)
             printf("Running ``%s %s''\n", config_script, action);
@@ -456,23 +297,23 @@ make_config_data(int expires,
     config->expires_m = config->origin_m + config->expires;
 
     if(ipv4)
-        config->ipv4_address = parse_list(ipv4, 4, IPv4_ADDRESS);
+        config->ipv4_address = parse_prefix_list(ipv4, 4, IPv4_ADDRESS);
 
     if(server_config->ipv6_prefix && server_config->ipv6_prefix[0] != 0) {
-        config->ipv6_prefix = parse_list(server_config->ipv6_prefix, 16,
-                                         IPv6_ADDRESS);
+        config->ipv6_prefix = parse_prefix_list(server_config->ipv6_prefix, 16,
+                                                IPv6_ADDRESS);
         config->ipv6_prefix->l[0].plen = 64;
     }
 
     if(server_config->name_server_len > 0)
-        config->name_server = parse_list(server_config->name_server,
-                                         server_config->name_server_len,
-                                         IPv6_ADDRESS);
+        config->name_server = parse_prefix_list(server_config->name_server,
+                                                server_config->name_server_len,
+                                                IPv6_ADDRESS);
 
     if(server_config->ntp_server_len > 0)
-        config->ntp_server = parse_list(server_config->ntp_server,
-                                        server_config->ntp_server_len,
-                                        IPv6_ADDRESS);
+        config->ntp_server = parse_prefix_list(server_config->ntp_server,
+                                               server_config->ntp_server_len,
+                                               IPv6_ADDRESS);
 
     my_address = my_ipv4(interfaces);
     if(my_address)
@@ -561,7 +402,7 @@ parse_message(int configure, const unsigned char *data, int len,
                 goto fail;
             }
 
-            value = parse_list(body + i + 2, olen, IPv6_PREFIX);
+            value = parse_prefix_list(body + i + 2, olen, IPv6_PREFIX);
             if(opt == OPT_IPv6_PREFIX)
                 config->ipv6_prefix = value;
             else
@@ -573,7 +414,7 @@ parse_message(int configure, const unsigned char *data, int len,
             }
 
             config->ipv4_prefix_delegation =
-                    parse_list(body + i + 2, olen, IPv4_PREFIX);
+                    parse_prefix_list(body + i + 2, olen, IPv4_PREFIX);
         } else if(opt == OPT_MY_IPv6_ADDRESS || opt == OPT_IPv6_ADDRESS ||
                   opt == OPT_NAME_SERVER || opt == OPT_NTP_SERVER) {
             struct prefix_list *value;
@@ -583,7 +424,7 @@ parse_message(int configure, const unsigned char *data, int len,
                 goto fail;
             }
 
-            value = parse_list(body + i + 2, olen, IPv6_ADDRESS);
+            value = parse_prefix_list(body + i + 2, olen, IPv6_ADDRESS);
             if(opt == OPT_MY_IPv6_ADDRESS)
                 config->server_ipv6 = value;
             else if(opt == OPT_IPv6_ADDRESS)
@@ -596,7 +437,7 @@ parse_message(int configure, const unsigned char *data, int len,
                 abort();
         } else if(opt == OPT_MY_IPv4_ADDRESS || opt == OPT_IPv4_ADDRESS) {
             struct prefix_list *value;
-            value = parse_list(body + i + 2, olen, IPv4_ADDRESS);
+            value = parse_prefix_list(body + i + 2, olen, IPv4_ADDRESS);
             if(opt == OPT_MY_IPv4_ADDRESS)
                 config->server_ipv4 = value;
             else if(opt == OPT_IPv4_ADDRESS)
@@ -668,7 +509,7 @@ parse_message(int configure, const unsigned char *data, int len,
             
             if(have_address)
                 config->our_ipv6_address =
-                    parse_list(address, 16, IPv6_ADDRESS);
+                    parse_prefix_list(address, 16, IPv6_ADDRESS);
             if(!config->our_ipv6_address)
                 fprintf(stderr, "Couldn't generate IPv6 address.\n");
         }

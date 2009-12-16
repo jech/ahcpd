@@ -20,23 +20,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-extern const unsigned char v4prefix[16];
-
-/* This holds both IPv6 and IPv4, and both prefixes and addresses.  For
-   IPv4, we use v4prefix above.  For addresses, plen is 0xFF. */
-
-struct prefix {
-    unsigned char p[16];
-    unsigned char plen;
-};
-
-#define MAX_PREFIX 8
-
-struct prefix_list {
-    int n;
-    struct prefix l[MAX_PREFIX];
-};
-
 /* This is used both to hold the contents of a message and to hold our
    current configuration. */
 struct config_data {
@@ -53,8 +36,6 @@ struct config_data {
 
 extern struct config_data *config_data;
 
-void prefix_list_extract4(unsigned char *dest, struct prefix_list *p);
-void prefix_list_extract6(unsigned char *dest, struct prefix_list *p);
 unsigned int config_renew_time(void);
 void free_config_data(struct config_data *config);
 int config_data_compatible(struct config_data *config1,

@@ -6,9 +6,9 @@ DEFINES = $(PLATFORM_DEFINES)
 
 CFLAGS = $(CDEBUGFLAGS) $(DEFINES) $(EXTRA_DEFINES)
 
-SRCS = ahcpd.c monotonic.c transport.c configure.c config.c lease.c
+SRCS = ahcpd.c monotonic.c transport.c prefix.c configure.c config.c lease.c
 
-OBJS = ahcpd.o monotonic.o transport.o configure.o config.o lease.o
+OBJS = ahcpd.o monotonic.o transport.o prefix.o configure.o config.o lease.o
 
 LDLIBS = -lrt
 

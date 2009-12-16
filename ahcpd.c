@@ -40,6 +40,7 @@ THE SOFTWARE.
 #include "monotonic.h"
 #include "protocol.h"
 #include "transport.h"
+#include "prefix.h"
 #include "config.h"
 #include "configure.h"
 #include "lease.h"
