@@ -541,6 +541,7 @@ main(int argc, char **argv)
             }
 
             rc = handle_packet(net >= 0, buf, len);
+            gettime(&now, NULL);
             if(rc == 2) {
                 unsigned char *body = buf + 24;
                 int bodylen = len - 24;
@@ -692,6 +693,7 @@ main(int argc, char **argv)
                             usleep(roughly(50000));
                             send_packet(psin, sinlen, buf + 8, hopcount,
                                         reply, rc);
+                            gettime(&now, NULL);
                         }
                         
                         free_config_data(config);
