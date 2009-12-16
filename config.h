@@ -23,9 +23,7 @@ THE SOFTWARE.
 #ifndef NO_SERVER
 struct server_config {
     const char *lease_dir;
-    unsigned char name_server[80], ntp_server[80];
-    unsigned int name_server_len, ntp_server_len;
-    unsigned char ipv6_prefix[16];
+    struct prefix_list *name_server, *ntp_server, *ipv6_prefix;
     unsigned char lease_first[4], lease_last[4];
 };
 

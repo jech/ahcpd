@@ -173,8 +173,8 @@ main(int argc, char **argv)
             p = strtok(optarg, ",");
             if(p) {
                 if(p[0] != '\0') {
-                    rc = inet_pton(AF_INET6, p, server_config->ipv6_prefix);
-                    if(rc <= 0) goto usage;
+                    server_config->ipv6_prefix = parse_address(p, IPv6_ADDRESS);
+                    if(server_config->ipv6_prefix == NULL) goto usage;
                 }
                 p = strtok(NULL, ",");
             }
@@ -199,37 +199,13 @@ main(int argc, char **argv)
                 p = strtok(NULL, ",");
             }
             if(p) {
-                unsigned char ipv4[4];
-                if(p[0] != '\0') {
-                    rc = inet_pton(AF_INET, p, ipv4);
-                    if(rc > 0) {
-                        memcpy(server_config->name_server, v4prefix, 12);
-                        memcpy(server_config->name_server + 12, ipv4, 4);
-                        server_config->name_server_len = 16;
-                    } else {
-                        rc = inet_pton(AF_INET6, p, server_config->name_server);
-                        if(rc <= 0)
-                            goto usage;
-                        server_config->name_server_len = 16;
-                    }
-                }
+                server_config->name_server = parse_address(p, ADDRESS);
+                if(server_config->name_server == NULL) goto usage;
                 p = strtok(NULL, ",");
             }
             if(p && *p) {
-                unsigned char ipv4[4];
-                if(p[0] != '\0') {
-                    rc = inet_pton(AF_INET, p, ipv4);
-                    if(rc > 0) {
-                        memcpy(server_config->ntp_server, v4prefix, 12);
-                        memcpy(server_config->ntp_server + 12, ipv4, 4);
-                        server_config->ntp_server_len = 16;
-                    } else {
-                        rc = inet_pton(AF_INET6, p, server_config->ntp_server);
-                        if(rc <= 0)
-                            goto usage;
-                        server_config->ntp_server_len = 16;
-                    }
-                }
+                server_config->ntp_server = parse_address(p, ADDRESS);
+                if(server_config->ntp_server == NULL) goto usage;
                 p = strtok(NULL, ",");
             }
             if(p)

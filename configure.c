@@ -299,21 +299,16 @@ make_config_data(int expires,
     if(ipv4)
         config->ipv4_address = raw_prefix_list(ipv4, 4, IPv4_ADDRESS);
 
-    if(server_config->ipv6_prefix && server_config->ipv6_prefix[0] != 0) {
-        config->ipv6_prefix = raw_prefix_list(server_config->ipv6_prefix, 16,
-                                                IPv6_ADDRESS);
+    if(server_config->ipv6_prefix) {
+        config->ipv6_prefix = copy_prefix_list(server_config->ipv6_prefix);
         config->ipv6_prefix->l[0].plen = 64;
     }
 
-    if(server_config->name_server_len > 0)
-        config->name_server = raw_prefix_list(server_config->name_server,
-                                                server_config->name_server_len,
-                                                IPv6_ADDRESS);
+    if(server_config->name_server)
+        config->name_server = copy_prefix_list(server_config->name_server);
 
-    if(server_config->ntp_server_len > 0)
-        config->ntp_server = raw_prefix_list(server_config->ntp_server,
-                                               server_config->ntp_server_len,
-                                               IPv6_ADDRESS);
+    if(server_config->ntp_server)
+        config->ntp_server = copy_prefix_list(server_config->ntp_server);
 
     my_address = my_ipv4(interfaces);
     if(my_address)
