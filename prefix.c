@@ -183,3 +183,52 @@ format_prefix_list(struct prefix_list *p, int kind)
     buf[j++] = '\0';
     return buf;
 }
+
+struct prefix_list *
+parse_address(char *address, int kind)
+{
+    struct prefix_list *list;
+    unsigned char ipv6[16], ipv4[4];
+    int rc;
+
+    switch(kind) {
+    case IPv6_ADDRESS:
+        rc = inet_pton(AF_INET6, address, ipv6);
+        if(rc > 0)
+            goto return_ipv6;
+        return NULL;
+    case IPv4_ADDRESS:
+        rc = inet_pton(AF_INET, address, ipv4);
+        if(rc > 0)
+            goto return_ipv4;
+    case ADDRESS:
+        rc = inet_pton(AF_INET, address, ipv4);
+        if(rc > 0)
+            goto return_ipv4;
+        rc = inet_pton(AF_INET6, address, ipv6);
+        if(rc > 0)
+            goto return_ipv6;
+        return NULL;
+    default:
+        abort();
+    }
+
+ return_ipv6:
+    list = calloc(1, sizeof(struct prefix_list));
+    if(list == NULL)
+        return NULL;
+    list->n = 1;
+    memcpy(list->l[0].p, ipv6, 16);
+    list->l[0].plen = 0xFF;
+    return list;
+
+ return_ipv4:
+    list = calloc(1, sizeof(struct prefix_list));
+    if(list == NULL)
+        return NULL;
+    list->n = 1;
+    memcpy(list->l[0].p, v4prefix, 12);
+    memcpy(list->l[0].p + 12, ipv4, 4);
+    list->l[0].plen = 0xFF;
+    return list;
+}

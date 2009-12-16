@@ -51,3 +51,4 @@ void prefix_list_extract6(unsigned char *dest, struct prefix_list *p);
 struct prefix_list *raw_prefix_list(const unsigned char *data, int len,
                                     int kind);
 char *format_prefix_list(struct prefix_list *p, int kind);
+struct prefix_list *parse_address(char *address, int kind);
