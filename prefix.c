@@ -154,6 +154,7 @@ format_prefix_list(struct prefix_list *p, int kind)
                 r = inet_ntop(AF_INET, p->l[i].p + 12, buf + j, 120 - j);
             else
                 r = inet_ntop(AF_INET6, p->l[i].p, buf + j, 120 - j);
+            if(r == NULL) return NULL;
             j += strlen(r);
             break;
         case IPv6_PREFIX:
