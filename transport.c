@@ -131,7 +131,7 @@ int send_packet(struct sockaddr *sin, int sinlen,
                               buf, bufsize);
 }
 
-static unsigned int
+static int
 check_duplicate(const unsigned char *header)
 {
     int i;
