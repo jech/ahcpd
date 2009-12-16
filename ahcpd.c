@@ -440,6 +440,8 @@ main(int argc, char **argv)
                 timeval_min_sec(&tv, config_renew_time());
         }
 
+        gettime(&now, NULL);
+
         if(timeval_compare(&tv, &now) > 0) {
             timeval_minus(&tv, &tv, &now);
 
