@@ -857,6 +857,7 @@ take_lease(const unsigned char *client_id, int client_len,
         time = MAX_RELATIVE_LEASE_TIME;
     a0 = 0;
 
+    /* Client suggested an IP.  If it is in range, try that. */
     if(suggested_ipv4) {
         a0 = ipv4_address(suggested_ipv4);
         entry = find_entry(a0);
@@ -867,25 +868,30 @@ take_lease(const unsigned char *client_id, int client_len,
                 a0 = 0;
         }
     }
-        
+
+    /* See if we have an old lease for this client. */
     if(a0 < first_address || a0 > last_address) {
         entry = find_entry_by_id(client_id, client_len);
         if(entry)
             a0 = entry->address;
     }
 
+    /* Choose a free slot. */
     if(a0 < first_address || a0 > last_address)
         a0 = find_entryless(first_address, last_address);
 
+    /* Choose the oldest slot. */
     if(a0 < first_address || a0 > last_address) {
         entry = find_oldest_entry();
         if(entry)
             a0 = entry->address;
     }
 
+    /* Give up, take the first one. */
     if(a0 < first_address || a0 > last_address)
         a0 = first_address;
 
+    /* Now scan all addresses in range sequentially, starting at a0. */
     a = a0;
     do {
         int rc;
