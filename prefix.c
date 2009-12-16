@@ -97,7 +97,7 @@ parse_p4(struct prefix *p, const unsigned char *data)
 }
 
 struct prefix_list *
-parse_prefix_list(const unsigned char *data, int len, int kind)
+raw_prefix_list(const unsigned char *data, int len, int kind)
 {
     struct prefix_list *l = calloc(1, sizeof(struct prefix_list));
     int i, size;

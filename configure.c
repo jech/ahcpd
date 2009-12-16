@@ -297,21 +297,21 @@ make_config_data(int expires,
     config->expires_m = config->origin_m + config->expires;
 
     if(ipv4)
-        config->ipv4_address = parse_prefix_list(ipv4, 4, IPv4_ADDRESS);
+        config->ipv4_address = raw_prefix_list(ipv4, 4, IPv4_ADDRESS);
 
     if(server_config->ipv6_prefix && server_config->ipv6_prefix[0] != 0) {
-        config->ipv6_prefix = parse_prefix_list(server_config->ipv6_prefix, 16,
+        config->ipv6_prefix = raw_prefix_list(server_config->ipv6_prefix, 16,
                                                 IPv6_ADDRESS);
         config->ipv6_prefix->l[0].plen = 64;
     }
 
     if(server_config->name_server_len > 0)
-        config->name_server = parse_prefix_list(server_config->name_server,
+        config->name_server = raw_prefix_list(server_config->name_server,
                                                 server_config->name_server_len,
                                                 IPv6_ADDRESS);
 
     if(server_config->ntp_server_len > 0)
-        config->ntp_server = parse_prefix_list(server_config->ntp_server,
+        config->ntp_server = raw_prefix_list(server_config->ntp_server,
                                                server_config->ntp_server_len,
                                                IPv6_ADDRESS);
 
@@ -402,7 +402,7 @@ parse_message(int configure, const unsigned char *data, int len,
                 goto fail;
             }
 
-            value = parse_prefix_list(body + i + 2, olen, IPv6_PREFIX);
+            value = raw_prefix_list(body + i + 2, olen, IPv6_PREFIX);
             if(opt == OPT_IPv6_PREFIX)
                 config->ipv6_prefix = value;
             else
@@ -414,7 +414,7 @@ parse_message(int configure, const unsigned char *data, int len,
             }
 
             config->ipv4_prefix_delegation =
-                    parse_prefix_list(body + i + 2, olen, IPv4_PREFIX);
+                    raw_prefix_list(body + i + 2, olen, IPv4_PREFIX);
         } else if(opt == OPT_MY_IPv6_ADDRESS || opt == OPT_IPv6_ADDRESS ||
                   opt == OPT_NAME_SERVER || opt == OPT_NTP_SERVER) {
             struct prefix_list *value;
@@ -424,7 +424,7 @@ parse_message(int configure, const unsigned char *data, int len,
                 goto fail;
             }
 
-            value = parse_prefix_list(body + i + 2, olen, IPv6_ADDRESS);
+            value = raw_prefix_list(body + i + 2, olen, IPv6_ADDRESS);
             if(opt == OPT_MY_IPv6_ADDRESS)
                 config->server_ipv6 = value;
             else if(opt == OPT_IPv6_ADDRESS)
@@ -437,7 +437,7 @@ parse_message(int configure, const unsigned char *data, int len,
                 abort();
         } else if(opt == OPT_MY_IPv4_ADDRESS || opt == OPT_IPv4_ADDRESS) {
             struct prefix_list *value;
-            value = parse_prefix_list(body + i + 2, olen, IPv4_ADDRESS);
+            value = raw_prefix_list(body + i + 2, olen, IPv4_ADDRESS);
             if(opt == OPT_MY_IPv4_ADDRESS)
                 config->server_ipv4 = value;
             else if(opt == OPT_IPv4_ADDRESS)
@@ -509,7 +509,7 @@ parse_message(int configure, const unsigned char *data, int len,
             
             if(have_address)
                 config->our_ipv6_address =
-                    parse_prefix_list(address, 16, IPv6_ADDRESS);
+                    raw_prefix_list(address, 16, IPv6_ADDRESS);
             if(!config->our_ipv6_address)
                 fprintf(stderr, "Couldn't generate IPv6 address.\n");
         }

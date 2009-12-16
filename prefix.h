@@ -48,6 +48,6 @@ struct prefix_list *copy_prefix_list(struct prefix_list *l);
 int prefix_list_eq(struct prefix_list *l1, struct prefix_list *l2);
 void prefix_list_extract4(unsigned char *dest, struct prefix_list *p);
 void prefix_list_extract6(unsigned char *dest, struct prefix_list *p);
-struct prefix_list *parse_prefix_list(const unsigned char *data, int len,
-                                      int kind);
+struct prefix_list *raw_prefix_list(const unsigned char *data, int len,
+                                    int kind);
 char *format_prefix_list(struct prefix_list *p, int kind);
