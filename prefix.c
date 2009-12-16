@@ -103,6 +103,9 @@ raw_prefix_list(const unsigned char *data, int len, int kind)
     int i, size;
     void (*parser)(struct prefix *, const unsigned char*) = NULL;
 
+    if(l == NULL)
+        return NULL;
+
     switch(kind) {
     case IPv6_ADDRESS: size = 16; parser = parse_a6; break;
     case IPv4_ADDRESS: size = 4; parser = parse_a4; break;
