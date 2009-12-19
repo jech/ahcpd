@@ -793,9 +793,8 @@ lease_init(const char *dir,
             continue;
         }
 
-        if(debug)
-            printf("Lease file %s: %u %u.\n",
-                   e->d_name, lease_orig, lease_time);
+        debugf(1, "Lease file %s: %u %u.\n",
+               e->d_name, lease_orig, lease_time);
 
         if(clock_status == CLOCK_TRUSTED) {
             if(lease_expired(NULL, lease_orig, lease_time)) {

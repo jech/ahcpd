@@ -154,8 +154,7 @@ run_script(const char *action, struct config_data *config, char **interfaces)
             setenv("AHCP_NTP_SERVER",
                    format_prefix_list(config->ntp_server, ADDRESS), 1);
 
-        if(debug >= 1)
-            printf("Running ``%s %s''\n", config_script, action);
+        debugf(1, "Running ``%s %s''\n", config_script, action);
 
         execl(config_script, config_script, action, NULL);
         perror("exec failed");
@@ -440,8 +439,8 @@ parse_message(int configure, const unsigned char *data, int len,
             else
                 abort();
         } else {
-            if(mandatory || debug >= 1)
-                fprintf(stderr, "Unsupported option %d\n", opt);
+            if(mandatory)
+                debugf(1, "Unsupported option %d\n", opt);
             if(mandatory && configure >= 0)
                 goto fail;
         }
