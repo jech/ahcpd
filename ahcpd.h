@@ -97,3 +97,31 @@ int timeval_compare(const struct timeval *s1, const struct timeval *s2);
 int clock_stepped();
 void do_debugf(int level, const char *format, ...)
     ATTRIBUTE ((format (printf, 2, 3))) COLD;
+
+#if defined NO_DEBUG
+
+#if defined __STDC_VERSION__ && __STDC_VERSION__ >= 199901L
+#define debugf(_level, ...) do {} while(0)
+#elif defined __GNUC__
+#define debugf(_level, _args...) do {} while(0)
+#else
+static inline void debugf(_level, const char *format, ...) { return; }
+#endif
+
+#else
+
+#if defined __STDC_VERSION__ && __STDC_VERSION__ >= 199901L
+#define debugf(_level, ...)                      \
+    do { \
+        if(UNLIKELY(debug >= _level)) do_debugf(_level, __VA_ARGS__);     \
+    } while(0)
+#elif defined __GNUC__
+#define debugf(_level, _args...)                 \
+    do { \
+        if(UNLIKELY(debug >= _level)) do_debugf(_level, _args);   \
+    } while(0)
+#else
+static inline void debugf(int _level, const char *format, ...) { return; }
+#endif
+
+#endif
