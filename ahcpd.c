@@ -22,6 +22,7 @@ THE SOFTWARE.
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
@@ -1201,4 +1202,16 @@ daemonise()
         return -1;
 
     return 1;
+}
+
+void
+do_debugf(int level, const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    if(debug >= level) {
+        vfprintf(stderr, format, args);
+        fflush(stderr);
+    }
+    va_end(args);
 }

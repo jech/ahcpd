@@ -95,3 +95,5 @@ void timeval_plus_msec(struct timeval *d,
                        const struct timeval *s, int msecs);
 int timeval_compare(const struct timeval *s1, const struct timeval *s2);
 int clock_stepped();
+void do_debugf(int level, const char *format, ...)
+    ATTRIBUTE ((format (printf, 2, 3))) COLD;
