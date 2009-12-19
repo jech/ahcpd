@@ -165,43 +165,43 @@ int
 handle_packet(int ll, const unsigned char *buf, size_t buflen)
 {
     if(buflen < 2) {
-        if(debug_level >= 1)
+        if(debug >= 1)
             printf("Received truncated packet.\n");
         return 0;
     }
 
     if(buf[0] != 43) {
-        if(debug_level >= 1)
+        if(debug >= 1)
             printf("Received corrupted packet.\n");
         return 0;
     }
 
     if(buf[1] != 1) {
-        if(debug_level >= 2)
+        if(debug >= 2)
             printf("Received packet with version %d.\n", buf[1]);
         return 0;
     }
 
     if(buflen < 24) {
-        if(debug_level >= 1)
+        if(debug >= 1)
             printf("Received truncated packet.\n");
         return 0;
     }
 
     if(buf[2] <= 0 || buf[3] <= 0 || buf[2] > buf[3]) {
-        if(debug_level >= 1)
+        if(debug >= 1)
             printf("Received packet with zero hop count.\n");
         return 0;
     }
 
     if(memcmp(buf + 8, zeroes, 8) == 0 || memcmp(buf + 8, ones, 8) == 0) {
-        if(debug_level >= 1)
+        if(debug >= 1)
             printf("Received packet with martian source.\n");
         return 0;
     }
 
     if(memcmp(buf + 16, zeroes, 8) == 0) {
-        if(debug_level >= 1)
+        if(debug >= 1)
             printf("Received packet with martian destination.\n");
         return 0;
     }
@@ -209,13 +209,13 @@ handle_packet(int ll, const unsigned char *buf, size_t buflen)
     /* The following tests do trigger in normal operation. */
 
     if(memcmp(buf + 8, myid, 8) == 0) {
-        if(debug_level >= 3)
+        if(debug >= 3)
             printf("Suppressed packet from self.\n");
         return 0;
     }
 
     if(check_duplicate(buf)) {
-        if(debug_level >= 3)
+        if(debug >= 3)
             printf("Suppressed duplicate.\n");
         return 0;
     }
@@ -226,7 +226,7 @@ handle_packet(int ll, const unsigned char *buf, size_t buflen)
         return 2;
 
     if(buf[2] >= 2) {
-        if(debug_level >= 2)
+        if(debug >= 2)
             printf("Forwarding packet, %d/%d hops left.\n",
                    buf[2] - 1, buf[3]);
 

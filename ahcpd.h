@@ -28,7 +28,7 @@ THE SOFTWARE.
 
 extern int nodns, af, request_prefix_delegation;
 extern char *config_script;
-extern int debug_level;
+extern int debug;
 extern unsigned char myid[8];
 extern int numnetworks;
 struct network {

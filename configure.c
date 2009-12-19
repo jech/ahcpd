@@ -125,7 +125,7 @@ run_script(const char *action, struct config_data *config, char **interfaces)
             i++;
         }
         setenv("AHCP_INTERFACES", buf, 1);
-        snprintf(buf, 50, "%d", debug_level);
+        snprintf(buf, 50, "%d", debug);
         setenv("AHCP_DEBUG_LEVEL", buf, 1);
         if(config->our_ipv6_address && (af & 2))
             setenv("AHCP_IPv6_ADDRESS",
@@ -154,7 +154,7 @@ run_script(const char *action, struct config_data *config, char **interfaces)
             setenv("AHCP_NTP_SERVER",
                    format_prefix_list(config->ntp_server, ADDRESS), 1);
 
-        if(debug_level >= 1)
+        if(debug >= 1)
             printf("Running ``%s %s''\n", config_script, action);
 
         execl(config_script, config_script, action, NULL);
@@ -440,7 +440,7 @@ parse_message(int configure, const unsigned char *data, int len,
             else
                 abort();
         } else {
-            if(mandatory || debug_level >= 1)
+            if(mandatory || debug >= 1)
                 fprintf(stderr, "Unsupported option %d\n", opt);
             if(mandatory && configure >= 0)
                 goto fail;

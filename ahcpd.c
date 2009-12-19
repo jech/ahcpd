@@ -58,7 +58,7 @@ unsigned char myid[8];
 char *unique_id_file = "/var/lib/ahcpd-unique-id";
 int nodns = 0, af = 3, request_prefix_delegation = 0;
 char *config_script = "/etc/ahcp/ahcp-config.sh";
-int debug_level = 1;
+int debug = 1;
 int do_daemonise = 0;
 char *logfile = NULL, *pidfile = "/var/run/ahcpd.pid";
 
@@ -147,7 +147,7 @@ main(int argc, char **argv)
             config_script = optarg;
             break;
         case 'd':
-            debug_level = atoi(optarg);
+            debug = atoi(optarg);
             break;
         case 'i':
             unique_id_file = optarg;
@@ -370,7 +370,7 @@ main(int argc, char **argv)
     if(server_config) {
         rc = lease_init(server_config->lease_dir,
                         server_config->lease_first, server_config->lease_last,
-                        debug_level >= 2);
+                        debug >= 2);
         if(rc < 0) {
             fprintf(stderr, "Couldn't initialise lease database.\n");
             goto fail;
@@ -404,7 +404,7 @@ main(int argc, char **argv)
         assert(!!config_data == (new == STATE_BOUND ||                  \
                                  new == STATE_RENEWING_UNICAST ||       \
                                  new == STATE_RENEWING));               \
-        if(debug_level >= 2)                                            \
+        if(debug >= 2)                                            \
             printf("Switching to state %d.\n", new);                    \
         state = new;                                                    \
         if(state == STATE_IDLE || state == STATE_BOUND)                 \
@@ -419,7 +419,7 @@ main(int argc, char **argv)
         SWITCH(STATE_INIT);
     }
 
-    if(debug_level >= 2)
+    if(debug >= 2)
         printf("Entering main loop.\n");
 
     while(1) {
@@ -446,7 +446,7 @@ main(int argc, char **argv)
             timeval_minus(&tv, &tv, &now);
 
             FD_SET(protocol_socket, &readfds);
-            if(debug_level >= 3)
+            if(debug >= 3)
                 printf("Sleeping for %d.%03ds, state=%d.\n",
                        (int)tv.tv_sec, (int)(tv.tv_usec / 1000), (int)state);
             rc = select(protocol_socket + 1, &readfds, NULL, NULL, &tv);
@@ -551,7 +551,7 @@ main(int argc, char **argv)
                     continue;
                 }
 
-                if(debug_level >= 2)
+                if(debug >= 2)
                     printf("Received packet %d in state %d.\n",
                            body[0], (int)state);
 
@@ -687,7 +687,7 @@ main(int argc, char **argv)
                         if(rc < 0) {
                             fprintf(stderr, "Couldn't build reply.\n");
                         } else {
-                            if(debug_level >= 2)
+                            if(debug >= 2)
                                 printf("Sending %d (%d bytes, %d hops).\n",
                                        reply[0], rc, hopcount);
                             usleep(roughly(50000));
@@ -731,7 +731,7 @@ main(int argc, char **argv)
                                memcmp(last_ipv4, zeroes, 4) ? NULL : last_ipv4,
                                buf, BUFFER_SIZE);
                 if(i >= 0) {
-                    if(debug_level >= 2)
+                    if(debug >= 2)
                         printf("Sending %d (%d bytes, %d hops).\n",
                                buf[0], i, server_hopcount);
                     send_packet(NULL, 0, NULL, server_hopcount, buf, i);
@@ -754,13 +754,13 @@ main(int argc, char **argv)
                     break;
                 }
                 if(state == STATE_REQUESTING && count > 7) {
-                    if(debug_level >= 2)
+                    if(debug >= 2)
                         printf("Giving up on request.\n");
                     server_hopcount = 0;
                     memset(selected_server, 0, 8);
                     SWITCH(STATE_INIT);
                 } else if(state == STATE_RENEWING_UNICAST) {
-                    if(debug_level >= 2)
+                    if(debug >= 2)
                         printf("Sending %d (%d bytes, unicast)\n",
                                buf[0], i);
                     rc = send_unicast_packet(selected_server, config_data,
@@ -775,7 +775,7 @@ main(int argc, char **argv)
                         set_timeout(MESSAGE, rc < 0 ? 300 : 10000, 1);
                     }
                 } else {
-                    if(debug_level >= 2)
+                    if(debug >= 2)
                         printf("Sending %d (%d bytes, %d hops).\n",
                                buf[0], i, server_hopcount);
                     send_packet(NULL, 0, selected_server, server_hopcount,
@@ -817,7 +817,7 @@ main(int argc, char **argv)
             int index = 0;
             int success = 0;
             while(1) {
-                if(debug_level >= 2)
+                if(debug >= 2)
                     printf("Sending %d (%d bytes, unicast).\n",  buf[0], i);
                 rc = send_unicast_packet(selected_server, config_data, index,
                                          buf, len);
@@ -831,7 +831,7 @@ main(int argc, char **argv)
             }
 
             if(!success) {
-                if(debug_level >= 2)
+                if(debug >= 2)
                     printf("Sending %d (%d bytes, %d hops).\n",
                            buf[0], i, server_hopcount);
                 send_packet(NULL, 0, NULL, server_hopcount + 2, buf, len);
