@@ -36,7 +36,10 @@ THE SOFTWARE.
 #include <net/if.h>
 #include <sys/ioctl.h>
 #include <netinet/in.h>
+
+#ifdef __linux__
 #include <netinet/ether.h>
+#endif
 
 #include "ahcpd.h"
 #include "monotonic.h"
