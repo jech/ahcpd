@@ -535,8 +535,9 @@ main(int argc, char **argv)
                         struct config_data *config;
                         config = parse_message(0, body, bodylen, interfaces);
                         if(config &&
-                           (config->ipv4_address || config->ipv6_prefix)) {
-                            if(config->ipv4_address)
+                           (((af & 1) && config->ipv4_address) ||
+                            ((af & 2) && config->ipv6_prefix))) {
+                            if((af & 1) && config->ipv4_address)
                                 prefix_list_extract4(last_ipv4,
                                                      config->ipv4_address);
                             server_hopcount = buf[3];
@@ -563,7 +564,7 @@ main(int argc, char **argv)
                             SWITCH(STATE_INIT);
                             set_timeout(MESSAGE, 30000, 1);
                         } else if(config) {
-                            if(config->ipv4_address)
+                            if((af & 1) && config->ipv4_address)
                                 prefix_list_extract4(last_ipv4,
                                                      config->ipv4_address);
                             server_hopcount = buf[3];
