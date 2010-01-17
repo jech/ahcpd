@@ -29,6 +29,8 @@ struct config_data {
     struct prefix_list *ipv6_prefix, *ipv4_prefix,
         *ipv6_address, *ipv4_address,
         *ipv6_prefix_delegation, *ipv4_prefix_delegation;
+    int ipv4_mandatory, ipv6_mandatory,
+        ipv4_delegation_mandatory, ipv6_delegation_mandatory;
     struct prefix_list *name_server, *ntp_server;
     /* This field is only in our configuration. */
     struct prefix_list *our_ipv6_address;

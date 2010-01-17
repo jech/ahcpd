@@ -408,10 +408,15 @@ parse_message(int configure, const unsigned char *data, int len,
             }
 
             value = raw_prefix_list(body + i + 2, olen, IPv6_PREFIX);
-            if(opt == OPT_IPv6_PREFIX)
+            if(opt == OPT_IPv6_PREFIX) {
                 CAT(config->ipv6_prefix, value);
-            else
+                if(mandatory)
+                    config->ipv6_mandatory = 1;
+            } else {
                 CAT(config->ipv6_prefix_delegation, value);
+                if(mandatory)
+                    config->ipv6_delegation_mandatory = 1;
+            }
         } else if(opt == OPT_IPv4_PREFIX_DELEGATION) {
             struct prefix_list *value;
             if(olen % 5 != 0) {
@@ -420,6 +425,8 @@ parse_message(int configure, const unsigned char *data, int len,
             }
             value = raw_prefix_list(body + i + 2, olen, IPv4_PREFIX);
             CAT(config->ipv4_prefix_delegation, value);
+            if(mandatory)
+                config->ipv4_delegation_mandatory = 1;
         } else if(opt == OPT_MY_IPv6_ADDRESS || opt == OPT_IPv6_ADDRESS ||
                   opt == OPT_NAME_SERVER || opt == OPT_NTP_SERVER) {
             struct prefix_list *value;
@@ -430,25 +437,31 @@ parse_message(int configure, const unsigned char *data, int len,
             }
 
             value = raw_prefix_list(body + i + 2, olen, IPv6_ADDRESS);
-            if(opt == OPT_MY_IPv6_ADDRESS)
+            if(opt == OPT_MY_IPv6_ADDRESS) {
                 CAT(config->server_ipv6, value);
-            else if(opt == OPT_IPv6_ADDRESS)
+            } else if(opt == OPT_IPv6_ADDRESS) {
                 CAT(config->ipv6_address, value);
-            else if(opt == OPT_NAME_SERVER)
+                if(mandatory)
+                    config->ipv6_mandatory = 1;
+            } else if(opt == OPT_NAME_SERVER) {
                 CAT(config->name_server, value);
-            else if(opt == OPT_NTP_SERVER)
+            } else if(opt == OPT_NTP_SERVER) {
                 CAT(config->ntp_server, value);
-            else
+            } else {
                 abort();
+            }
         } else if(opt == OPT_MY_IPv4_ADDRESS || opt == OPT_IPv4_ADDRESS) {
             struct prefix_list *value;
             value = raw_prefix_list(body + i + 2, olen, IPv4_ADDRESS);
-            if(opt == OPT_MY_IPv4_ADDRESS)
+            if(opt == OPT_MY_IPv4_ADDRESS) {
                 CAT(config->server_ipv4, value);
-            else if(opt == OPT_IPv4_ADDRESS)
+            } else if(opt == OPT_IPv4_ADDRESS) {
                 CAT(config->ipv4_address, value);
-            else
+                if(mandatory)
+                    config->ipv4_mandatory = 1;
+            } else {
                 abort();
+            }
         } else {
             if(mandatory)
                 debugf(1, "Unsupported option %d\n", opt);
