@@ -20,8 +20,8 @@ Speficy the link-local multicast address to be used by AHCP.
 Specify the UDP port number to be used by AHCP.
 .TP
 .B \-n
-Participate in the flooding protocol, but don't actually perform any
-configuration.
+Operate as a forwarder: participate in the flooding protocol, but don't
+actually perform any configuration.
 .TP
 .B \-4
 Only attempt to configure IPv4 addresses.
@@ -80,7 +80,11 @@ The following keywords are recognised:
 .TP
 .BR mode " " server | client | forwarder
 Specifies whether the daemon operates as a server, a client, or
-a forwarder.  This must be the first line in the configuration file.
+a forwarder.  If omitted, the default is to operate as a client, unless
+the
+.B \-n
+flag is present on the command line.  If present, this must be the first
+line in the configuration file.
 .TP
 .BI prefix " prefix"
 Specifies either a prefix to use for configuring clients.  This keyword is
