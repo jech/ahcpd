@@ -25,6 +25,7 @@ THE SOFTWARE.
 #define ADDRESS 2
 #define IPv6_PREFIX 3
 #define IPv4_PREFIX 4
+#define PREFIX 5
 
 extern const unsigned char v4prefix[16];
 
@@ -52,6 +53,6 @@ void prefix_list_extract6(unsigned char *dest, struct prefix_list *p);
 struct prefix_list *raw_prefix_list(const unsigned char *data, int len,
                                     int kind);
 char *format_prefix_list(struct prefix_list *p, int kind);
-struct prefix_list *parse_address(char *address, int kind);
+struct prefix_list *parse_prefix(char *address, int kind);
 struct prefix_list *cat_prefix_list(struct prefix_list *p1,
                                     struct prefix_list *p2);

@@ -198,11 +198,13 @@ format_prefix_list(struct prefix_list *p, int kind)
 }
 
 struct prefix_list *
-parse_address(char *address, int kind)
+parse_prefix(char *address, int kind)
 {
     struct prefix_list *list;
     unsigned char ipv6[16], ipv4[4];
-    int rc;
+    int plen, rc;
+
+    plen = 0xFF;
 
     switch(kind) {
     case IPv6_ADDRESS:
@@ -222,6 +224,29 @@ parse_address(char *address, int kind)
         if(rc > 0)
             goto return_ipv6;
         return NULL;
+    case PREFIX: {
+        char buf[30];
+        char *p;
+
+        p = strchr(address, '/');
+        if(p == NULL || p - address >= 30)
+            return NULL;
+        plen = atoi(p + 1);
+        if(plen <= 0 || plen > 128)
+            return NULL;
+        memcpy(buf, address, p - address);
+        buf[p - address] = '\0';
+        rc = inet_pton(AF_INET, buf, ipv4);
+        if(rc > 0) {
+            if(plen > 32)
+                return NULL;
+            goto return_ipv4;
+        }
+        rc = inet_pton(AF_INET6, buf, ipv6);
+        if(rc > 0)
+            goto return_ipv6;
+        return NULL;
+    }
     default:
         abort();
     }
@@ -232,7 +257,7 @@ parse_address(char *address, int kind)
         return NULL;
     list->n = 1;
     memcpy(list->l[0].p, ipv6, 16);
-    list->l[0].plen = 0xFF;
+    list->l[0].plen = plen;
     return list;
 
  return_ipv4:
@@ -242,7 +267,7 @@ parse_address(char *address, int kind)
     list->n = 1;
     memcpy(list->l[0].p, v4prefix, 12);
     memcpy(list->l[0].p + 12, ipv4, 4);
-    list->l[0].plen = 0xFF;
+    list->l[0].plen = plen == 0xFF ? 0xFF : plen + 96;
     return list;
 }
 

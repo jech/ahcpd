@@ -174,7 +174,7 @@ main(int argc, char **argv)
             p = strtok(optarg, ",");
             if(p) {
                 if(p[0] != '\0') {
-                    server_config->ipv6_prefix = parse_address(p, IPv6_ADDRESS);
+                    server_config->ipv6_prefix = parse_prefix(p, IPv6_ADDRESS);
                     if(server_config->ipv6_prefix == NULL) goto usage;
                 }
                 p = strtok(NULL, ",");
@@ -200,12 +200,12 @@ main(int argc, char **argv)
                 p = strtok(NULL, ",");
             }
             if(p) {
-                server_config->name_server = parse_address(p, ADDRESS);
+                server_config->name_server = parse_prefix(p, ADDRESS);
                 if(server_config->name_server == NULL) goto usage;
                 p = strtok(NULL, ",");
             }
             if(p && *p) {
-                server_config->ntp_server = parse_address(p, ADDRESS);
+                server_config->ntp_server = parse_prefix(p, ADDRESS);
                 if(server_config->ntp_server == NULL) goto usage;
                 p = strtok(NULL, ",");
             }
