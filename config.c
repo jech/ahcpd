@@ -228,12 +228,12 @@ parse_config(gnc_t gnc, void *closure)
                 last = htonl(last - 1);
                 memcpy(server_config->lease_first, &first, 4);
                 memcpy(server_config->lease_last, &last, 4);
+                free(prefix);
             } else {
                 server_config->ipv6_prefix =
                     cat_prefix_list(server_config->ipv6_prefix,
                                     prefix);
             }
-            free(prefix);
             free(ptoken);
             c = skip_eol(c, gnc, closure);
             if(c < -1)
@@ -263,7 +263,6 @@ parse_config(gnc_t gnc, void *closure)
                 server_config->ntp_server =
                     cat_prefix_list(server_config->ntp_server,
                                     prefix);
-            free(prefix);
             free(ptoken);
         } else {
             return -1;

@@ -279,7 +279,10 @@ cat_prefix_list(struct prefix_list *p1, struct prefix_list *p2)
     int i;
 
     if(p1 == NULL)
-        return copy_prefix_list(p2);
+        return p2;
+
+    if(p2 == NULL)
+        return p1;
 
     if(p1->n + p2->n > MAX_PREFIX)
         return NULL;
@@ -289,5 +292,6 @@ cat_prefix_list(struct prefix_list *p1, struct prefix_list *p2)
 
     p1->n += p2->n;
 
+    free(p2);
     return p1;
 }
