@@ -69,27 +69,6 @@ otherwise.
 .TP
 .BI \-I " pidfile"
 Specify a file to write our process id to.
-.SH FILES
-.TP
-.B /var/lib/ahcp\-unique\-id
-An 8-byte long file containing this host's unique id.  If it doesn't exist,
-a new unique id will be generated from an interface's MAC address.
-.TP
-.BR /etc/ahcp/ahcp\-config.sh
-The script that performs the actual configuration.  It will be passed one
-argument, which is either
-.B start
-or
-.BR stop .
-.TP
-.B /etc/ahcp/ahcp\-local.sh
-If this is an executable script, it will be called by
-.B ahcp\-config.sh
-just after configuring or deconfiguring. It will be passed one
-argument, which is either
-.B start
-or
-.BR stop .
 .SH CONFIGURATION FILE FORMAT
 The configuration is a sequence of lines, each of which starts with
 one of the keywords below.  Blank lines are ignored.  Comments are
@@ -117,6 +96,27 @@ multiple times.
 Specifies the address of an NTP server to configure clients with.  This
 keyword is only valid in server configurations, and may be repeated
 multiple times.
+.SH FILES
+.TP
+.B /var/lib/ahcp\-unique\-id
+An 8-byte long file containing this host's unique id.  If it doesn't exist,
+a new unique id will be generated from an interface's MAC address.
+.TP
+.BR /etc/ahcp/ahcp\-config.sh
+The script that performs the actual configuration.  It will be passed one
+argument, which is either
+.B start
+or
+.BR stop .
+.TP
+.B /etc/ahcp/ahcp\-local.sh
+If this is an executable script, it will be called by
+.B ahcp\-config.sh
+just after configuring or deconfiguring. It will be passed one
+argument, which is either
+.B start
+or
+.BR stop .
 .SH SIGNALS
 .TP
 .B SIGUSR1
