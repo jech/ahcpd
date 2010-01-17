@@ -108,6 +108,8 @@ parse_p4(struct prefix *p, const unsigned char *data)
     p->plen = data[4] + 96;
 }
 
+/* Note that this returns an empty prefix list, rather than NULL, when len
+   is 0.  We rely on this in order to keep track of requested options. */
 struct prefix_list *
 raw_prefix_list(const unsigned char *data, int len, int kind)
 {

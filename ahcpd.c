@@ -631,7 +631,8 @@ main(int argc, char **argv)
                             continue;
                         }
 
-                        if(server_config->lease_first[0]) {
+                        if(server_config->lease_first[0] &&
+                           config->ipv4_address) {
                             rc = take_lease(buf + 8, 8,
                                             memcmp(ipv4, zeroes, 4) == 0 ?
                                             ipv4 : NULL,
