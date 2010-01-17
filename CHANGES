@@ -1,3 +1,10 @@
+ahcpd 0.51 (unreleased)
+
+  * Implemented client-side support for prefix delegation (-P).
+  * Made requesting state more persistent, to deal with packet loss.
+  * Fixed a typo that prevented the -I option from working.
+  * Fixed compilation on BSD systems.
+
 11 August 2009: ahcpd 0.50
 
   * Complete redesign of AHCP as a client-server protocol layered over
