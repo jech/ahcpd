@@ -1,5 +1,6 @@
 ahcpd 0.51 (unreleased)
 
+  * Servers are now configured with a plain-text configuration file.
   * Implemented client-side support for prefix delegation (-P).
   * Made requesting state more persistent, to deal with packet loss.
   * Fixed a typo that prevented the -I option from working.
