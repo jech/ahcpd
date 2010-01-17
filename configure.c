@@ -598,6 +598,15 @@ query_body(unsigned char opcode, int time, const unsigned char *ipv4,
         }
     }
 
+    if(opcode != AHCP_RELEASE) {
+        if(!nodns) {
+            buf[i++] = OPT_NAME_SERVER; if(i >= buflen) goto fail;
+            buf[i++] = 0; if(i >= buflen) goto fail;
+        }
+        buf[i++] = OPT_NTP_SERVER; if(i >= buflen) goto fail;
+        buf[i++] = 0; if(i >= buflen) goto fail;
+    }
+
     /* Set up header */
     j = i - 4;
     buf[0] = opcode;
