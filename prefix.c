@@ -245,3 +245,22 @@ parse_address(char *address, int kind)
     list->l[0].plen = 0xFF;
     return list;
 }
+
+struct prefix_list *
+cat_prefix_list(struct prefix_list *p1, struct prefix_list *p2)
+{
+    int i;
+
+    if(p1 == NULL)
+        return copy_prefix_list(p2);
+
+    if(p1->n + p2->n > MAX_PREFIX)
+        return NULL;
+
+    for(i = 0; i < p2->n; i++)
+        p1->l[p1->n + i] = p2->l[i];
+
+    p1->n += p2->n;
+
+    return p1;
+}

@@ -53,3 +53,5 @@ struct prefix_list *raw_prefix_list(const unsigned char *data, int len,
                                     int kind);
 char *format_prefix_list(struct prefix_list *p, int kind);
 struct prefix_list *parse_address(char *address, int kind);
+struct prefix_list *cat_prefix_list(struct prefix_list *p1,
+                                    struct prefix_list *p2);
