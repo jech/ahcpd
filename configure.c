@@ -332,6 +332,15 @@ parse_message(int configure, const unsigned char *data, int len,
     struct timeval now, real;
     int clock_status;
 
+#define CAT(dst, src)                           \
+    do {                                        \
+        struct prefix_list *pcat;               \
+        pcat = cat_prefix_list(dst, src);       \
+        if(pcat == NULL)                        \
+            goto fail;                          \
+        dst = pcat;                             \
+    } while(0)
+
     if(len < 4)
         return NULL;
 
@@ -400,17 +409,17 @@ parse_message(int configure, const unsigned char *data, int len,
 
             value = raw_prefix_list(body + i + 2, olen, IPv6_PREFIX);
             if(opt == OPT_IPv6_PREFIX)
-                config->ipv6_prefix = value;
+                CAT(config->ipv6_prefix, value);
             else
-                config->ipv6_prefix_delegation = value;
+                CAT(config->ipv6_prefix_delegation, value);
         } else if(opt == OPT_IPv4_PREFIX_DELEGATION) {
+            struct prefix_list *value;
             if(olen % 5 != 0) {
                 fprintf(stderr, "Unexpected length for prefix.\n");
                 goto fail;
             }
-
-            config->ipv4_prefix_delegation =
-                    raw_prefix_list(body + i + 2, olen, IPv4_PREFIX);
+            value = raw_prefix_list(body + i + 2, olen, IPv4_PREFIX);
+            CAT(config->ipv4_prefix_delegation, value);
         } else if(opt == OPT_MY_IPv6_ADDRESS || opt == OPT_IPv6_ADDRESS ||
                   opt == OPT_NAME_SERVER || opt == OPT_NTP_SERVER) {
             struct prefix_list *value;
@@ -422,22 +431,22 @@ parse_message(int configure, const unsigned char *data, int len,
 
             value = raw_prefix_list(body + i + 2, olen, IPv6_ADDRESS);
             if(opt == OPT_MY_IPv6_ADDRESS)
-                config->server_ipv6 = value;
+                CAT(config->server_ipv6, value);
             else if(opt == OPT_IPv6_ADDRESS)
-                config->ipv6_address = value;
+                CAT(config->ipv6_address, value);
             else if(opt == OPT_NAME_SERVER)
-                config->name_server = value;
+                CAT(config->name_server, value);
             else if(opt == OPT_NTP_SERVER)
-                config->ntp_server = value;
+                CAT(config->ntp_server, value);
             else
                 abort();
         } else if(opt == OPT_MY_IPv4_ADDRESS || opt == OPT_IPv4_ADDRESS) {
             struct prefix_list *value;
             value = raw_prefix_list(body + i + 2, olen, IPv4_ADDRESS);
             if(opt == OPT_MY_IPv4_ADDRESS)
-                config->server_ipv4 = value;
+                CAT(config->server_ipv4, value);
             else if(opt == OPT_IPv4_ADDRESS)
-                config->ipv4_address = value;
+                CAT(config->ipv4_address, value);
             else
                 abort();
         } else {
@@ -533,6 +542,8 @@ parse_message(int configure, const unsigned char *data, int len,
  fail:
     free_config_data(config);
     return NULL;
+
+#undef CAT
 }
 
 int
