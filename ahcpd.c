@@ -638,12 +638,25 @@ main(int argc, char **argv)
                                             ipv4 : NULL,
                                             ipv4, &client_lease_time,
                                             body[0] == AHCP_REQUEST);
-
-                            if(body[0] == AHCP_DISCOVER && rc < 0)
-                                continue;
                         } else {
-                            rc = -1;
+                            rc = 0;
                         }
+
+                        if((config->ipv4_mandatory && ipv4[0] == 0) ||
+                           (config->ipv6_mandatory &&
+                            !server_config->ipv6_prefix) ||
+                           config->ipv4_delegation_mandatory ||
+                           config->ipv6_delegation_mandatory) {
+                            /* We're unable to satisfy the client's
+                               mandatory constraints. */
+                                rc = -1;
+                        }
+
+                        /* If the client is in the initial state, there's
+                           no point in notifying it about failures -- let
+                           it fall back to another server */
+                        if(rc < 0 && body[0] == AHCP_DISCOVER)
+                                continue;
 
                         config =
                             make_config_data(client_lease_time,
@@ -654,9 +667,9 @@ main(int argc, char **argv)
                             continue;
                         }
 
-                        rc = server_body(body[0] == AHCP_DISCOVER ?
-                                         AHCP_OFFER :
-                                         rc >= 0 ? AHCP_ACK : AHCP_NACK,
+                        rc = server_body(rc < 0 ? AHCP_NACK :
+                                         body[0] == AHCP_DISCOVER ?
+                                         AHCP_OFFER : AHCP_ACK,
                                          config, reply, BUFFER_SIZE);
                         if(rc < 0) {
                             fprintf(stderr, "Couldn't build reply.\n");
