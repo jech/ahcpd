@@ -50,6 +50,18 @@ prefix_list_eq(struct prefix_list *l1, struct prefix_list *l2)
         memcmp(l1->l, l2->l, l1->n * sizeof(struct prefix)) == 0;
 }
 
+int
+prefix_list_v4(struct prefix_list *l)
+{
+    int i;
+    for(i = 0; i < l->n; i++) {
+        if(l->l[i].plen < 96 ||
+           memcmp(l->l[i].p, v4prefix, 12) != 0)
+            return 0;
+    }
+    return 1;
+}
+
 void
 prefix_list_extract6(unsigned char *dest, struct prefix_list *p)
 {

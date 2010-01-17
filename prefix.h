@@ -46,6 +46,7 @@ struct prefix_list {
 void free_prefix_list(struct prefix_list *l);
 struct prefix_list *copy_prefix_list(struct prefix_list *l);
 int prefix_list_eq(struct prefix_list *l1, struct prefix_list *l2);
+int prefix_list_v4(struct prefix_list *l);
 void prefix_list_extract4(unsigned char *dest, struct prefix_list *p);
 void prefix_list_extract6(unsigned char *dest, struct prefix_list *p);
 struct prefix_list *raw_prefix_list(const unsigned char *data, int len,
