@@ -302,10 +302,8 @@ make_config_data(int expires,
     if(ipv4)
         config->ipv4_address = raw_prefix_list(ipv4, 4, IPv4_ADDRESS);
 
-    if(server_config->ipv6_prefix) {
+    if(server_config->ipv6_prefix)
         config->ipv6_prefix = copy_prefix_list(server_config->ipv6_prefix);
-        config->ipv6_prefix->l[0].plen = 64;
-    }
 
     if(server_config->name_server)
         config->name_server = copy_prefix_list(server_config->name_server);
