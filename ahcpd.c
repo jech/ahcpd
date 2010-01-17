@@ -107,6 +107,7 @@ int
 main(int argc, char **argv)
 {
     char *multicast = "ff02::cca6:c0f9:e182:5359";
+    char *config_file = NULL;
     struct sockaddr_in6 sin6;
     int opt, fd, rc, i, net;
     unsigned int seed;
@@ -119,7 +120,7 @@ main(int argc, char **argv)
 
     
     while(1) {
-        opt = getopt(argc, argv, "m:p:nN46s:d:i:t:P:S:DL:I:");
+        opt = getopt(argc, argv, "m:p:nN46s:d:i:t:P:c:C:DL:I:");
         if(opt < 0)
             break;
 
@@ -161,60 +162,17 @@ main(int argc, char **argv)
         case 'P':
             request_prefix_delegation = 1;
             break;
-#ifndef NO_SERVER
-        case 'S': {
-            char *p;
-            if(server_config)
-                goto usage;
-            server_config = calloc(1, sizeof(struct server_config));
-            if(server_config == NULL) {
-                perror("malloc(server_config)");
+        case 'c':
+            config_file = optarg;
+            break;
+        case 'C':
+            rc = parse_config_from_string(optarg);
+            if(rc < 0) {
+                fprintf(stderr,
+                        "Couldn't parse configuration from command line.\n");
                 exit(1);
             }
-            p = strtok(optarg, ",");
-            if(p) {
-                if(p[0] != '\0') {
-                    server_config->ipv6_prefix = parse_prefix(p, IPv6_ADDRESS);
-                    if(server_config->ipv6_prefix == NULL) goto usage;
-                }
-                p = strtok(NULL, ",");
-            }
-            if(p) {
-                if(p[0] != '\0') {
-                    rc = inet_pton(AF_INET, p, server_config->lease_first);
-                    if(rc <= 0) goto usage;
-                }
-                p = strtok(NULL, ",");
-            }
-            if(p) {
-                if(p[0] != '\0') {
-                    rc = inet_pton(AF_INET, p, server_config->lease_last);
-                    if(rc <= 0) goto usage;
-                }
-                p = strtok(NULL, ",");
-            }
-            if(p && *p) {
-                if(p[0] != '\0') {
-                    server_config->lease_dir = strdup(p);
-                }
-                p = strtok(NULL, ",");
-            }
-            if(p) {
-                server_config->name_server = parse_prefix(p, ADDRESS);
-                if(server_config->name_server == NULL) goto usage;
-                p = strtok(NULL, ",");
-            }
-            if(p && *p) {
-                server_config->ntp_server = parse_prefix(p, ADDRESS);
-                if(server_config->ntp_server == NULL) goto usage;
-                p = strtok(NULL, ",");
-            }
-            if(p)
-                goto usage;
-            client_config = 0;
             break;
-        }
-#endif
         case 'D':
             do_daemonise = 1;
             break;
@@ -231,6 +189,16 @@ main(int argc, char **argv)
 
     if(optind >= argc)
         goto usage;
+
+    if(config_file) {
+        rc = parse_config_from_file(config_file);
+        if(rc < 0) {
+            fprintf(stderr,
+                    "Couldn't parse configuration from file %s.\n",
+                    config_file);
+            exit(1);
+        }
+    }
 
     for(i = optind; i < argc; i++) {
         if(i - optind >= MAXNETWORKS) {
@@ -367,8 +335,8 @@ main(int argc, char **argv)
 
  unique_id_done:
 
-#ifndef NO_SERVER
     if(server_config) {
+#ifndef NO_SERVER
         rc = lease_init(server_config->lease_dir,
                         server_config->lease_first, server_config->lease_last,
                         debug >= 2);
@@ -376,8 +344,10 @@ main(int argc, char **argv)
             fprintf(stderr, "Couldn't initialise lease database.\n");
             goto fail;
         }
-    }
+#else
+        abort();
 #endif
+    }
 
     protocol_socket = ahcp_socket(protocol_port);
     if(protocol_socket < 0) {
@@ -470,10 +440,8 @@ main(int argc, char **argv)
             printf("Clock status %d, stable for at least %ld seconds.\n",
                    (int)clock_status, (long)stable);
             printf("Forwarder forwarding.\n");
-#ifndef NO_SERVER
             if(server_config)
                 printf("Server serving.\n");
-#endif
             if(client_config) {
                 printf("Client in state %d, ", (int)state);
                 if(memcmp(selected_server, zeroes, 8) != 0)
@@ -842,7 +810,7 @@ main(int argc, char **argv)
             "              "
             "[-i file] [-s script] [-D] [-I pidfile] [-L logfile]\n"
             "              "
-            "[-S ipv6,first,last,dir,name-server,ntp-server] "
+            "[-c statement] [-C filename]"
             "interface...\n");
     exit(1);
 

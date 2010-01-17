@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2007-2009 by Juliusz Chroboczek
+Copyright (c) 2007-2010 by Juliusz Chroboczek
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,14 +20,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-#ifndef NO_SERVER
 struct server_config {
     const char *lease_dir;
     struct prefix_list *name_server, *ntp_server, *ipv6_prefix;
     unsigned char lease_first[4], lease_last[4];
 };
 
-extern struct server_config *server_config;
-#endif
-
 extern int client_config;
+extern struct server_config *server_config;
+
+int parse_config_from_string(char *string);
+int parse_config_from_file(char *filename);
