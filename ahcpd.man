@@ -51,22 +51,12 @@ Specify the filename containing this host's unique id.  The default is
 If it doesn't exist, it will be created by
 .BR ahcpd .
 .TP
-.BI \-S " ipv6,first,last,dir,name-server,ntp-server"
-Run as an AHCP server rather than a client.
-.I Ipv6
-specifies the IPv6 prefix.
-.I First
-and
-.I last
-represent the bounds of the range of IPv4 addresses available; active
-leases will be stored in the directory
-.IR dir ,
-which should be in persistent storage (not a RAM disk).
-.B Name-server
-and
-.B ntp-server
-can be IPv4 or IPv6 addresses, and specify respectively the address of the
-DNS server and of the NTP server to configure clients with.
+.BI \-c " filename"
+Specify the name of the configuration file.  The default is
+.BR /etc/babeld.conf .
+.TP
+.BI \-C " statement"
+Specify a configuration statement directly on the command line.
 .TP
 .B \-D
 Daemonise at startup.
@@ -100,6 +90,33 @@ argument, which is either
 .B start
 or
 .BR stop .
+.SH CONFIGURATION FILE FORMAT
+The configuration is a sequence of lines, each of which starts with
+one of the keywords below.  Blank lines are ignored.  Comments are
+introduced with an octothorp
+.RB `` # ''
+and terminate at the end of the line.
+
+The following keywords are recognised:
+.TP
+.BR mode " " server | client | forwarder
+Specifies whether the daemon operates as a server, a client, or
+a forwarder.  This must be the first line in the configuration file.
+.TP
+.BI prefix " prefix"
+Specifies either a prefix to use for configuring clients.  This keyword is
+only valid in server configurations, and may be specified twice, once for
+IPv4 and once for IPv6.
+.TP
+.BI name-server " address"
+Specifies the address of a DNS server to configure clients with.  This
+keyword is only valid in server configurations, and may be repeated
+multiple times.
+.TP
+.BI ntp-server " address"
+Specifies the address of an NTP server to configure clients with.  This
+keyword is only valid in server configurations, and may be repeated
+multiple times.
 .SH SIGNALS
 .TP
 .B SIGUSR1
