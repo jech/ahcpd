@@ -337,12 +337,19 @@ main(int argc, char **argv)
 
     if(server_config) {
 #ifndef NO_SERVER
-        rc = lease_init(server_config->lease_dir,
-                        server_config->lease_first, server_config->lease_last,
-                        debug >= 2);
-        if(rc < 0) {
-            fprintf(stderr, "Couldn't initialise lease database.\n");
-            goto fail;
+        if(server_config->lease_first[0] != 0) {
+            if(server_config->lease_dir == NULL) {
+                fprintf(stderr, "No lease directory configured!\n");
+                goto fail;
+            }
+            rc = lease_init(server_config->lease_dir,
+                            server_config->lease_first,
+                            server_config->lease_last,
+                            debug >= 2);
+            if(rc < 0) {
+                fprintf(stderr, "Couldn't initialise lease database.\n");
+                goto fail;
+            }
         }
 #else
         abort();
@@ -623,7 +630,7 @@ main(int argc, char **argv)
                             continue;
                         }
 
-                        if(server_config) {
+                        if(server_config->lease_first[0]) {
                             rc = take_lease(buf + 8, 8,
                                             memcmp(ipv4, zeroes, 4) == 0 ?
                                             ipv4 : NULL,
