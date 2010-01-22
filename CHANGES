@@ -5,6 +5,8 @@ ahcpd 0.51 (unreleased)
   * Made requesting state more persistent, to deal with packet loss.
   * Fixed a typo that prevented the -I option from working.
   * Fixed compilation on BSD systems.
+  * Fixed a bug that could cause an expired lease to be discarded when
+    older ones are available.
 
 11 August 2009: ahcpd 0.50
 
