@@ -168,7 +168,7 @@ find_oldest_entry()
             continue;
         a = now.tv_sec - entries[i].lease_end_m;
         if(a > age) {
-            a = age;
+            age = a;
             j = i;
         }
     }
