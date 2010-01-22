@@ -135,7 +135,7 @@ raw_prefix_list(const unsigned char *data, int len, int kind)
     while(i < len) {
         if(l->n >= MAX_PREFIX)
             break;
-        parser(&l->l[l->n], data + i * size);
+        parser(&l->l[l->n], data + i);
         l->n++;
         i += size;
     }
