@@ -631,8 +631,17 @@ main(int argc, char **argv)
                             continue;
                         }
 
-                        if(server_config->lease_first[0] &&
-                           config->ipv4_address) {
+                        if((config->ipv4_mandatory &&
+                            !server_config->lease_first[0]) ||
+                           (config->ipv6_mandatory &&
+                            !server_config->ipv6_prefix) ||
+                           config->ipv4_delegation_mandatory ||
+                           config->ipv6_delegation_mandatory) {
+                            /* We won't be able to satisfy the client's
+                               mandatory constraints. */
+                                rc = -1;
+                        } else if(server_config->lease_first[0] &&
+                                  config->ipv4_address) {
                             rc = take_lease(buf + 8, 8,
                                             memcmp(ipv4, zeroes, 4) == 0 ?
                                             ipv4 : NULL,
@@ -642,19 +651,9 @@ main(int argc, char **argv)
                             rc = 0;
                         }
 
-                        if((config->ipv4_mandatory && ipv4[0] == 0) ||
-                           (config->ipv6_mandatory &&
-                            !server_config->ipv6_prefix) ||
-                           config->ipv4_delegation_mandatory ||
-                           config->ipv6_delegation_mandatory) {
-                            /* We're unable to satisfy the client's
-                               mandatory constraints. */
-                                rc = -1;
-                        }
-
                         /* If the client is in the initial state, there's
-                           no point in notifying it about failures -- let
-                           it fall back to another server */
+                           no point in notifying it about failures -- it
+                           will time out and fall back to another server */
                         if(rc < 0 && body[0] == AHCP_DISCOVER)
                                 continue;
 
