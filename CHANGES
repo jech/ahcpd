@@ -1,4 +1,4 @@
-ahcpd 0.51 (unreleased)
+29 January 2010: ahcpd 0.51
 
   * Servers are now configured with a plain-text configuration file.
   * Implemented client-side support for prefix delegation (-P).
