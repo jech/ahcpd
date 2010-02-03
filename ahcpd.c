@@ -831,7 +831,7 @@ main(int argc, char **argv)
             "              "
             "[-i file] [-s script] [-D] [-I pidfile] [-L logfile]\n"
             "              "
-            "[-c statement] [-C filename]"
+            "[-C statement] [-c filename]"
             "interface...\n");
     exit(1);
 
