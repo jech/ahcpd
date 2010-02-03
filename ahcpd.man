@@ -14,10 +14,11 @@ transitive connectivity, such as mesh networks.
 .SH OPTIONS
 .TP
 .BI \-m " multicast-address"
-Speficy the link-local multicast address to be used by AHCP.
+Specify the link-local multicast address to be used by AHCP.  The
+default is ff02::cca6:c0f9:e182:5359.
 .TP
 .BI \-p " port"
-Specify the UDP port number to be used by AHCP.
+Specify the UDP port number to be used by AHCP.  The default is 5359.
 .TP
 .B \-n
 Operate as a forwarder: participate in the flooding protocol, but don't
@@ -34,7 +35,7 @@ Do not configure DNS.
 .TP
 .BI \-t " time"
 Specify the time, in seconds, for which leases are requested.  The default
-is slightly over one hour.
+is slightly over one hour.  Must be between five minutes and a year.
 .TP
 .BI \-s " script"
 Specify the configuration script to run.  The default is
@@ -52,8 +53,7 @@ If it doesn't exist, it will be created by
 .BR ahcpd .
 .TP
 .BI \-c " filename"
-Specify the name of the configuration file.  The default is
-.BR /etc/babeld.conf .
+Specify the name of the configuration file.
 .TP
 .BI \-C " statement"
 Specify a configuration statement directly on the command line.
@@ -68,7 +68,8 @@ defaults to standard error if not daemonising, and to
 otherwise.
 .TP
 .BI \-I " pidfile"
-Specify a file to write our process id to.
+Specify a file to write our process id to.  The default is
+.B /var/run/ahcpd.pid.
 .SH CONFIGURATION FILE FORMAT
 The configuration is a sequence of lines, each of which starts with
 one of the keywords below.  Blank lines are ignored.  Comments are
