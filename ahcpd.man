@@ -88,9 +88,13 @@ flag is present on the command line.  If present, this must be the first
 line in the configuration file.
 .TP
 .BI prefix " prefix"
-Specifies either a prefix to use for configuring clients.  This keyword is
-only valid in server configurations, and may be specified twice, once for
+Specifies a prefix to use for configuring clients.  This keyword is only
+valid in server configurations, and may be specified twice, once for
 IPv4 and once for IPv6.
+.TP
+.BI lease-dir " directory"
+Specifies a directory to store lease files.  This keyword is only valid
+in server configurations.
 .TP
 .BI name-server " address"
 Specifies the address of a DNS server to configure clients with.  This
