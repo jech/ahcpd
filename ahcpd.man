@@ -154,7 +154,7 @@ necessary.
 .SH SEE ALSO
 .BR dhcpcd (8),
 .BR dhclient (8),
-.BR babel (8),
+.BR babeld (8),
 .BR olsrd (8),
 .BR ntpd (8),
 .IR "The Ad-Hoc Configuration Protocol" .

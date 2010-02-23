@@ -19,7 +19,7 @@ ahcpd: $(OBJS)
 
 .man.html:
 	rman -f html $< | \
-	sed -e "s|<a href='babel.8'|<a href=\"../babel/babel.html\"|" \
+	sed -e "s|<a href='babeld.8'|<a href=\"../babel/babeld.html\"|" \
             -e "s|<a href='\\(ahcp[-a-z]*\\).8'|<a href=\"\1.html\"|" \
 	    -e "s|<a href='[^']*8'>\\(.*(8)\\)</a>|\1|" \
 	> $@
