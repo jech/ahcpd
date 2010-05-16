@@ -33,8 +33,10 @@ THE SOFTWARE.
 #include <sys/wait.h>
 #include <arpa/inet.h>
 #include <sys/time.h>
+#include <sys/socket.h>
 #include <time.h>
 #include <net/if.h>
+#include <netinet/in.h>
 #include <sys/ioctl.h>
 #include <netinet/in.h>
 

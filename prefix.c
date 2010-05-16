@@ -24,6 +24,7 @@ THE SOFTWARE.
 #include <string.h>
 #include <stdio.h>
 #include <arpa/inet.h>
+#include <sys/socket.h>
 
 #include "prefix.h"
 
