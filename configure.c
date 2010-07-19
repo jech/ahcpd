@@ -505,7 +505,7 @@ parse_message(int configure, const unsigned char *data, int len,
         if(config->ipv6_address) {
             config->our_ipv6_address = copy_prefix_list(config->ipv6_address);
         } else if(config->ipv6_prefix && config->ipv6_prefix->n > 0 &&
-                  config->ipv6_prefix->l[0].plen >= 64) {
+                  config->ipv6_prefix->l[0].plen <= 64) {
             unsigned char address[16];
             int have_address = 0;
 
