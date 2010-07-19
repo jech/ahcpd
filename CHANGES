@@ -1,3 +1,8 @@
+ahcpd 0.52: unreleased
+
+  * Fixed a typo when testing the prefix length of received IPv6 prefixes.
+    (Thanks to Gabriel Kerneis.)
+
 29 January 2010: ahcpd 0.51
 
   * Servers are now configured with a plain-text configuration file.
