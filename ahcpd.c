@@ -974,10 +974,6 @@ ahcp_socket(int port)
     if(s < 0)
         return -1;
 
-    rc = setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY, &zero, sizeof(one));
-    if(rc < 0)
-        goto fail;
-
     rc = setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
     if(rc < 0)
         perror("setsockopt(SO_REUSEADDR)");
