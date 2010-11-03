@@ -38,7 +38,6 @@ THE SOFTWARE.
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/ioctl.h>
-#include <netinet/in.h>
 
 #ifdef __linux__
 #include <netinet/ether.h>
