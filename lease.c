@@ -32,8 +32,8 @@ THE SOFTWARE.
 #include <sys/uio.h>
 #include <dirent.h>
 #include <sys/socket.h>
-#include <arpa/inet.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include "ahcpd.h"
 #include "monotonic.h"
