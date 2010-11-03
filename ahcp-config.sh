@@ -35,25 +35,7 @@ ipv6_address="$AHCP_IPv6_ADDRESS"
 
 platform=`uname`
 
-if [ "$platform" = "Darwin" ]; then
-
-    add_ipv6_address() {
-	ifconfig "$1" inet6 "$2/$3"
-    }
-
-    del_ipv6_address() {
-	ifconfig "$1" inet6 "$2/$3" delete
-    }
-
-    add_ipv4_address() {
-	ifconfig "$1" inet "$2/$3"
-    }
-
-    del_ipv4_address() {
-	ifconfig "$1" inet "$2/$3" delete
-    }
-
-else
+if [ "$platform" = "Linux" ]; then
 
     findcmd ip iproute
 
@@ -75,6 +57,24 @@ else
     del_ipv4_address() {
 	ip addr del "$2/$3" dev "$1"
     }
+else
+
+    add_ipv6_address() {
+	ifconfig "$1" inet6 "$2/$3"
+    }
+
+    del_ipv6_address() {
+	ifconfig "$1" inet6 "$2/$3" delete
+    }
+
+    add_ipv4_address() {
+	ifconfig "$1" inet "$2/$3"
+    }
+
+    del_ipv4_address() {
+	ifconfig "$1" inet "$2/$3" delete
+    }
+
 fi
 
 add_addresses() {
