@@ -316,7 +316,7 @@ main(int argc, char **argv)
     rc = random_eui64(myid);
     if(rc < 0) {
         fprintf(stderr, "Couldn't generate unique id.\n");
-        exit(1);
+        goto fail;
     }
 
  write_unique_id:
