@@ -872,7 +872,7 @@ random_eui64(unsigned char *eui)
         return -1;
 
     rc = read(fd, eui, 8);
-    if(rc < 0)
+    if(rc < 8)
         return -1;
     close(fd);
 
