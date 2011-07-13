@@ -860,18 +860,14 @@ if_eui64(char *ifname, unsigned char *eui)
 }
 #endif
 
-#if defined(__linux)
-#define RND_DEV "/dev/random"
-#elif defined(__OpenBSD__)
-#define RND_DEV "/dev/arandom"
-#endif
-
 int
 random_eui64(unsigned char *eui)
 {
-#ifdef RND_DEV
     int fd, rc;
-    fd = open(RND_DEV, O_RDONLY);
+
+    /* If there's no /dev/urandom, this will fail with ENOENT,
+       which the caller will deal with gracefully. */
+    fd = open("/dev/urandom", O_RDONLY);
     if(fd < 0)
         return -1;
 
@@ -882,8 +878,4 @@ random_eui64(unsigned char *eui)
 
     eui[0] &= ~3;
     return 1;
-#else
-    errno = ENOSYS;
-    return -1;
-#endif
 }
