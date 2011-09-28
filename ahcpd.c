@@ -35,6 +35,7 @@ THE SOFTWARE.
 #include <sys/socket.h>
 #include <sys/uio.h>
 #include <netinet/in.h>
+#include <netinet/ip.h>
 #include <arpa/inet.h>
 #include <net/if.h>
 
@@ -969,6 +970,7 @@ ahcp_socket(int port)
     int s, rc;
     int saved_errno;
     int one = 1, zero = 0;
+    const int ds = 0xc0;        /* CS6 - Network Control */
 
     s = socket(PF_INET6, SOCK_DGRAM, 0);
     if(s < 0)
@@ -994,6 +996,15 @@ ahcp_socket(int port)
     if(rc < 0)
         perror("setsockopt(IPV6_V6ONLY)");
 #endif
+
+#ifdef IPV6_TCLASS
+    rc = setsockopt(s, IPPROTO_IPV6, IPV6_TCLASS, &ds, sizeof(ds));
+#else
+    rc = -1;
+    errno = ENOSYS;
+#endif
+    if (rc < 0)
+        perror("setsockopt(IPV6_TCLASS)");
 
     rc = fcntl(s, F_GETFD, 0);
     if(rc < 0)
