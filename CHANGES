@@ -1,3 +1,9 @@
+8 December 2011: ahcpd 0.53
+
+  * Fixed a longstanding bug that would cause a client to immediately
+    deconfigure itself after successfully renewing a lease.
+  * Set AHCP packets' TOS field as network control (thanks to Dave Taht).
+
 28 July 2011: ahcpd 0.52
 
   * Port to OpenBSD, by Vincent Gross.
