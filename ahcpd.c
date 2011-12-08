@@ -381,9 +381,6 @@ main(int argc, char **argv)
 
 #define SWITCH(new)                                                     \
     do {                                                                \
-        assert(!!config_data == (new == STATE_BOUND ||                  \
-                                 new == STATE_RENEWING_UNICAST ||       \
-                                 new == STATE_RENEWING));               \
         debugf(2, "Switching to state %d.\n", new);                     \
         state = new;                                                    \
         if(state == STATE_IDLE || state == STATE_BOUND)                 \
