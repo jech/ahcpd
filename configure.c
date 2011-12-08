@@ -548,6 +548,7 @@ parse_message(int configure, const unsigned char *data, int len,
             config_data->origin = config->origin;
             config_data->origin_m = config->origin_m;
             config_data->expires = config->expires;
+            config_data->expires_m = config->expires_m;
         }
     }
 
