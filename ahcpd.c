@@ -567,12 +567,13 @@ main(int argc, char **argv)
                                 prefix_list_extract4(last_ipv4,
                                                      config->ipv4_address);
                             server_hopcount = buf[3];
-                            free_config_data(config);
                             SWITCH(STATE_BOUND);
                         } else {
                             fprintf(stderr,
                                     "Eek!  Configured, but config null.\n");
                         }
+                        if(config)
+                            free_config_data(config);
                     } else if(body[0] == AHCP_NACK &&
                               memcmp(buf + 8, selected_server, 8) == 0) {
                         if(config_data)
