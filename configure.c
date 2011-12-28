@@ -479,7 +479,7 @@ parse_message(int configure, const unsigned char *data, int len,
     config->origin_m = now.tv_sec;
     config->expires = MIN(25 * 3600, expires);
 
-    if(origin >= 0) {
+    if(origin > 0) {
         config->origin = origin;
         if(configure >= 0) {
             if(origin >= real.tv_sec - 300 && origin <= real.tv_sec + 300) {
