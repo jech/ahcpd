@@ -41,6 +41,11 @@ THE SOFTWARE.
 
 #ifdef __linux__
 #include <netinet/ether.h>
+#else
+#include <sys/sysctl.h>
+#include <net/if.h>
+#include <net/if_dl.h>
+#include <net/route.h>
 #endif
 
 #include "ahcpd.h"
@@ -847,6 +852,88 @@ if_eui64(char *ifname, unsigned char *eui)
         errno = ENOENT;
         return -1;
     }
+}
+
+#elif defined(NET_RT_IFLIST)
+
+static int get_sdl(struct sockaddr_dl *sdl, char *ifname);
+
+int
+if_eui64(char *ifname, unsigned char *eui)
+{
+    struct sockaddr_dl sdl;
+    char *tmp = NULL;
+    if (get_sdl(&sdl, ifname) < 0) {
+        return -1;
+    }
+    tmp = sdl.sdl_data + sdl.sdl_nlen;
+    if (sdl.sdl_alen == 8) {
+        memcpy(eui, tmp, 8);
+        eui[0] ^= 2;
+    } else if (sdl.sdl_alen == 6) {
+        memcpy(eui,   tmp,   3);
+        eui[3] = 0xFF;
+        eui[4] = 0xFE;
+        memcpy(eui+5, tmp+3, 3);
+    } else {
+        return -1;
+    }
+    return 0;
+}
+
+/* fill sdl with the structure corresponding to ifname.
+ Warning: make a syscall (and get all interfaces).
+ return -1 if an error occurs, 0 otherwise. */
+static int
+get_sdl(struct sockaddr_dl *sdl, char *ifname)
+{
+    int mib[6];
+    size_t buf_len = 0;
+    int offset = 0;
+    char *buffer = NULL;
+    struct if_msghdr *ifm = NULL;
+    struct sockaddr_dl *tmp_sdl = NULL;
+    int rc;
+
+    mib[0] = CTL_NET;
+    mib[1] = PF_ROUTE;
+    mib[2] = 0;
+    mib[3] = AF_LINK;
+    mib[4] = NET_RT_IFLIST;
+    mib[5] = 0;
+
+    rc = sysctl(mib, 6, NULL, &buf_len, NULL, 0);
+    if(rc < 0)
+        return -1;
+
+    buffer = (char *)malloc(buf_len);
+    if(buffer == NULL)
+        return -1;
+
+    rc = sysctl(mib, 6, buffer, &buf_len, NULL, 0);
+    if(rc < 0)
+        goto fail;
+
+    offset = 0;
+    while (offset < (int) buf_len) {
+        ifm = (struct if_msghdr *) &buffer[offset];
+        switch (ifm->ifm_type) {
+            case RTM_IFINFO:
+                tmp_sdl = (struct sockaddr_dl *) (ifm + 1);
+                if (strncmp(ifname, tmp_sdl->sdl_data, tmp_sdl->sdl_nlen) == 0
+                    && strlen(ifname) == tmp_sdl->sdl_nlen) {
+                    memcpy(sdl, tmp_sdl, sizeof(struct sockaddr_dl));
+                    return 0;
+                }
+            default:
+                break;
+        }
+        offset += ifm->ifm_msglen;
+    }
+
+fail:
+    free(buffer);
+    return -1;
 }
 
 #else
