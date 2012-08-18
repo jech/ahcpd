@@ -99,6 +99,51 @@ elif [ "$platform" = "Darwin" ]; then
         networksetup -setv4off $(getServiceName "$1")
     }
 
+    # With MacOS X < 10.7 and a 64bit processor the 'networksetup'
+    # command is unable to correctly setup an IPv6 address. For
+    # instance:
+    #   networksetup -setv6manual Ethernet 1111:2222:3333:4444:5555:6666:7777:8888 128
+    # install the following IP:
+    #   1111:2222:4444:5555::random_bits
+    # The following functions use lower-level tools to fix the incorrect IPv6.
+
+    fix_ipv6_addresses() {
+
+        version=$(sysctl -n kern.osrelease | cut -d . -f 1)
+
+	# Kernel version for MacOS X 10.6.x is 10.x.0
+	( [ $version -le 10 ] && [ "$(sysctl -n hw.cpu64bit_capable)" = "1" ] ) || return
+
+        SCUTIL="scutil --prefs /Library/Preferences/SystemConfiguration/preferences.plist"
+
+        service_id=$(scselect 2>&1 | grep " \* " | cut -f 1 | cut -d ' ' -f 3)
+
+        all_intf_ids=$(echo "get /Sets/$service_id/Network/Global/IPv4
+d.show" | sudo scutil --prefs /Library/Preferences/SystemConfiguration/preferences.plist | tail -n +3 | grep -v } | cut -d ' ' -f 7)
+
+        get_service_id() {
+            for id in ${all_intf_ids}; do
+                intf=$(echo "get /NetworkServices/$id/Interface
+d.show" | ${SCUTIL} | grep DeviceName | sed 's%  DeviceName : %%')
+                if [ "$intf" = "$1" ]; then
+                    echo $id
+                    return
+                fi
+            done
+            die "Unknown interface"
+        }
+
+        id=$(get_service_id $1)
+        ${SCUTIL} <<EOF
+get /NetworkServices/$id/IPv6
+d.add Addresses * $ipv6_address
+set /NetworkServices/$id/IPv6
+commit
+apply
+EOF
+
+    }
+
 else
 
     add_ipv6_address() {
@@ -124,6 +169,9 @@ add_addresses() {
         for a in $ipv6_address; do
             add_ipv6_address $i $a 128
         done
+        if [ "$platform" = "Darwin" ]; then
+            fix_ipv6_addresses $i
+        fi
         for a in $ipv4_address; do
             add_ipv4_address $i $a 32
         done
