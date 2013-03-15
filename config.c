@@ -75,7 +75,7 @@ getword(int c, char **token_r, gnc_t gnc, void *closure)
 
     c = skip_whitespace(c, gnc, closure);
     if(c < 0)
-        return c;
+        return -2;
     if(c == '"' || c == '\n')
         return -2;
     do {
@@ -208,7 +208,7 @@ parse_config(gnc_t gnc, void *closure)
                 return -1;
 
             prefix = parse_prefix(ptoken, PREFIX);
-            
+
             if(prefix == NULL || prefix->n != 1)
                 return -1;
 
