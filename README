@@ -13,6 +13,10 @@ Installation
     $ make
     # make install
 
+If compiling for BSD, you probably don't need to link with -lrt:
+
+    $ make LDLIBS=''
+
 If compiling for OpenWRT, you will probably want to say something like
 
     $ make CC=mipsel-linux-gcc PLATFORM_DEFINES='-march=mips32'
