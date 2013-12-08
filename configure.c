@@ -167,7 +167,7 @@ run_script(const char *action, struct config_data *config, char **interfaces)
         debugf(1, "Running ``%s %s''\n", config_script, action);
 
         execl(config_script, config_script, action, NULL);
-        perror("exec failed");
+        perror("Couldn't run configuration script");
         exit(42);
     } else {
         int status;
