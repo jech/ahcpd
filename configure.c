@@ -122,7 +122,7 @@ run_script(const char *action, struct config_data *config, char **interfaces)
         perror("fork");
         return -1;
     } else if(pid == 0) {
-        char buf[200];
+        char buf[201];
         int i;
         snprintf(buf, 50, "%lu", (unsigned long)getppid());
         setenv("AHCP_DAEMON_PID", buf, 1);
@@ -130,8 +130,8 @@ run_script(const char *action, struct config_data *config, char **interfaces)
         i = 0;
         while(interfaces[i]) {
             if(i > 0)
-                strncat(buf, " ", 200);
-            strncat(buf, interfaces[i], 200);
+                strncat(buf, " ", 200 - strlen(buf));
+            strncat(buf, interfaces[i], 200 - strlen(buf));
             i++;
         }
         setenv("AHCP_INTERFACES", buf, 1);
