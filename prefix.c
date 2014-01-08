@@ -115,12 +115,9 @@ parse_p4(struct prefix *p, const unsigned char *data)
 struct prefix_list *
 raw_prefix_list(const unsigned char *data, int len, int kind)
 {
-    struct prefix_list *l = calloc(1, sizeof(struct prefix_list));
+    struct prefix_list *l;
     int i, size;
     void (*parser)(struct prefix *, const unsigned char*) = NULL;
-
-    if(l == NULL)
-        return NULL;
 
     switch(kind) {
     case IPv6_ADDRESS: size = 16; parser = parse_a6; break;
@@ -131,6 +128,10 @@ raw_prefix_list(const unsigned char *data, int len, int kind)
     }
 
     if(len % size != 0)
+        return NULL;
+
+    l = calloc(1, sizeof(struct prefix_list));
+    if(l == NULL)
         return NULL;
 
     i = 0;
